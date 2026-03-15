@@ -4,6 +4,9 @@ go 1.18
 
 require (
 	github.com/dgraph-io/badger/v3 v3.2103.5
+	github.com/go-chi/chi/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/google/uuid v1.6.0
 	github.com/mr-tron/base58 v1.2.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 )
