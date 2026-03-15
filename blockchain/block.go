@@ -10,35 +10,61 @@ import (
 	"time"
 )
 
+func init() {
+	// Register ValidatorSig for GOB encoding (used inside Block.Signatures slice).
+	gob.Register(ValidatorSig{})
+}
+
 type Block struct {
 	Timestamp    uint
 	PrevHash     []byte
 	Transactions []*Transaction
 	Hash         []byte
 	Height       uint64
-	Validator    []byte
-	Signature    []byte
+	Signatures   []ValidatorSig // replaces Validator + Signature (M-of-N quorum)
 }
 
 func Genesis(coinbase *Transaction, pubKey []byte, privKey ecdsa.PrivateKey) *Block {
 	return NewBlock([]*Transaction{coinbase}, []byte{}, 0, pubKey, privKey)
 }
 
+// NewBlock creates a new block signed by the lead validator (pubKey/privKey).
+// The block starts with a single signature; co-signatures can be added via AddCoSig.
 func NewBlock(txs []*Transaction, prevHash []byte, height uint64, pubKey []byte, privKey ecdsa.PrivateKey) *Block {
 	block := &Block{
 		Timestamp:    uint(time.Now().Unix()),
 		PrevHash:     prevHash,
 		Transactions: txs,
 		Height:       height,
-		Validator:    pubKey,
 	}
 	block.Hash = block.computeHash()
 
 	r, s, err := ecdsa.Sign(rand.Reader, &privKey, block.Hash)
 	HandleFatalErrors(err)
-	block.Signature = encodeSig(r, s)
+	sig := encodeSig(r, s)
 
+	block.Signatures = []ValidatorSig{{PubKey: pubKey, Sig: sig}}
 	return block
+}
+
+// AddCoSig appends a co-signature from another validator.
+// Duplicate public keys are silently ignored.
+func (b *Block) AddCoSig(pubKey, sig []byte) {
+	for _, s := range b.Signatures {
+		if bytes.Equal(s.PubKey, pubKey) {
+			return
+		}
+	}
+	b.Signatures = append(b.Signatures, ValidatorSig{PubKey: pubKey, Sig: sig})
+}
+
+// LeadValidator returns the public key of the first (lead) validator signature.
+// Returns nil if the block has no signatures.
+func (b *Block) LeadValidator() []byte {
+	if len(b.Signatures) == 0 {
+		return nil
+	}
+	return b.Signatures[0].PubKey
 }
 
 func (b *Block) computeHash() []byte {

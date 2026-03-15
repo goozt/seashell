@@ -85,7 +85,7 @@ func TestEncodeSig64Bytes(t *testing.T) {
 	rand.Read(hash)
 
 	// Run many times to hit the rare case where r or s < 32 bytes.
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		rReal, sReal, err := ecdsa.Sign(rand.Reader, privKey, hash)
 		if err != nil {
 			t.Fatal(err)
@@ -272,7 +272,7 @@ func TestConcurrentAddBlock(t *testing.T) {
 	var wg sync.WaitGroup
 	const n = 5
 
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -330,7 +330,7 @@ func TestGetBlocksFromHeight(t *testing.T) {
 	defer chain.Close()
 
 	addr := newAddress(t, pubKey)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		coinbase := blockchain.CoinbaseTx(addr, "block")
 		chain.AddBlock([]*blockchain.Transaction{coinbase}, pubKey, privKey)
 	}

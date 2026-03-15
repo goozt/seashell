@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 
 	badger "github.com/dgraph-io/badger/v3"
 )
@@ -20,6 +21,13 @@ const (
 
 var lastHashByte = []byte("lh")
 var heightKey = []byte("bh")
+
+// heightIndexKey returns the DB key for the height→hash index entry.
+func heightIndexKey(height uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, height)
+	return append([]byte("idx:height:"), b...)
+}
 
 type BlockChain struct {
 	LastHash []byte
@@ -171,6 +179,9 @@ func (chain *BlockChain) AddBlock(txs []*Transaction, pubKey []byte, privKey ecd
 		if err := txn.Set(lastHashByte, newBlock.Hash); err != nil {
 			return err
 		}
+		if err := txn.Set(heightIndexKey(newHeight), newBlock.Hash); err != nil {
+			return err
+		}
 		heightBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(heightBytes, newHeight)
 		chain.LastHash = newBlock.Hash
@@ -205,10 +216,77 @@ func (chain *BlockChain) AddExternalBlock(block *Block) error {
 		if err := txn.Set(lastHashByte, block.Hash); err != nil {
 			return err
 		}
+		if err := txn.Set(heightIndexKey(block.Height), block.Hash); err != nil {
+			return err
+		}
 		heightBytes := make([]byte, 8)
 		binary.BigEndian.PutUint64(heightBytes, block.Height)
 		chain.LastHash = block.Hash
 		return txn.Set(heightKey, heightBytes)
+	})
+}
+
+// GetBlockByHeight returns the block at the given height using the height index.
+// Returns an error if the height index entry or block data is missing.
+func (chain *BlockChain) GetBlockByHeight(height uint64) (*Block, error) {
+	var blockHash []byte
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(heightIndexKey(height))
+		if err != nil {
+			return err
+		}
+		blockHash, err = item.ValueCopy(nil)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("height index lookup %d: %w", height, err)
+	}
+	var block *Block
+	err = chain.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(blockHash)
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		block = Deserialize(data)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get block %d: %w", height, err)
+	}
+	return block, nil
+}
+
+// DeleteBlock removes a block from the live chain by its hash.
+// Also removes the height index entry for this block.
+// Used by the archival service to move old blocks out of the live DB.
+func (chain *BlockChain) DeleteBlock(hash []byte) error {
+	// First fetch the block to get its height (for index cleanup).
+	var height uint64
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(hash)
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		block := Deserialize(data)
+		height = block.Height
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("fetch block for delete: %w", err)
+	}
+	return chain.Database.Update(func(txn *badger.Txn) error {
+		if err := txn.Delete(hash); err != nil {
+			return err
+		}
+		return txn.Delete(heightIndexKey(height))
 	})
 }
 
@@ -403,9 +481,7 @@ func (chain *BlockChain) GetBlocksFromHeight(fromHeight uint64, limit int) []*Bl
 		}
 	}
 	// Reverse to oldest-first.
-	for i, j := 0, len(all)-1; i < j; i, j = i+1, j-1 {
-		all[i], all[j] = all[j], all[i]
-	}
+	slices.Reverse(all)
 	var result []*Block
 	for _, b := range all {
 		if b.Height >= fromHeight {

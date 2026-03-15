@@ -16,7 +16,6 @@ func BroadcastBlock(peers []model.Node, block *blockchain.Block, secret string) 
 	}
 	done := make(chan error, len(peers))
 	for _, p := range peers {
-		p := p
 		go func() {
 			client := NewPeerClient(p.NodeURL, secret)
 			done <- client.BroadcastBlock(block)
@@ -36,7 +35,6 @@ func BroadcastNewValidator(peers []model.Node, pubKeyHex string, secret string) 
 	}
 	done := make(chan error, len(peers))
 	for _, p := range peers {
-		p := p
 		go func() {
 			client := NewPeerClient(p.NodeURL, secret)
 			done <- client.NotifyNewValidator(pubKeyHex)

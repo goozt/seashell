@@ -75,7 +75,8 @@ func (cli *CommandLine) list() {
 		fmt.Printf("  Height: %d\n", block.Height)
 		fmt.Printf("  Timestamp: %d\n", block.Timestamp)
 		fmt.Printf("  PreviousHash: %x\n", block.PrevHash)
-		fmt.Printf("  Validator: %x\n", block.Validator)
+		fmt.Printf("  Lead Validator: %x\n", block.LeadValidator())
+		fmt.Printf("  Signatures: %d\n", len(block.Signatures))
 		fmt.Printf("  Valid PoA: %s\n", strconv.FormatBool(blockchain.ValidateBlock(block, chain.Database)))
 		for _, tx := range block.Transactions {
 			fmt.Println(tx)

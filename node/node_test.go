@@ -134,8 +134,9 @@ func TestSerializedBlockRoundTrip(t *testing.T) {
 		PrevHash:  hex.EncodeToString(make([]byte, 32)),
 		Height:    5,
 		Timestamp: 1700000000,
-		Validator: hex.EncodeToString(make([]byte, 64)),
-		Signature: hex.EncodeToString(make([]byte, 64)),
+		Signatures: []node.SerializedValidatorSig{
+			{PubKey: hex.EncodeToString(make([]byte, 64)), Sig: hex.EncodeToString(make([]byte, 64))},
+		},
 	}
 
 	data, err := json.Marshal(original)

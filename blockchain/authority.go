@@ -53,48 +53,58 @@ func AddValidatorToDB(db *badger.DB, pubKey []byte) {
 	HandleFatalErrors(err)
 }
 
-// SelectValidator returns the expected validator public key for a given block height
-// using round-robin selection across the validator list.
-func SelectValidator(height uint64, validators [][]byte) []byte {
-	return validators[height%uint64(len(validators))]
+// countValidSigs counts how many of the block's signatures come from registered validators
+// and are cryptographically valid over block.Hash. Duplicate signer pubkeys are counted once.
+func countValidSigs(block *Block, validators [][]byte) int {
+	curve := elliptic.P256()
+	seen := make(map[string]bool)
+	count := 0
+	for _, vs := range block.Signatures {
+		if len(vs.PubKey) != 64 || len(vs.Sig) != 64 {
+			continue
+		}
+		// Must be a registered validator.
+		registered := false
+		for _, v := range validators {
+			if bytes.Equal(v, vs.PubKey) {
+				registered = true
+				break
+			}
+		}
+		if !registered {
+			continue
+		}
+		// Deduplicate.
+		key := string(vs.PubKey)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		// Verify signature.
+		r, s := decodeSig(vs.Sig)
+		x, y := decodePubKey(vs.PubKey)
+		pubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
+		if ecdsa.Verify(&pubKey, block.Hash, &r, &s) {
+			count++
+		}
+	}
+	return count
 }
 
-// ValidateBlock verifies that the block was signed by the correct round-robin validator.
+// ValidateBlock verifies the block has a quorum of valid signatures from registered validators.
 func ValidateBlock(block *Block, db *badger.DB) bool {
 	validators := GetValidators(db)
 	if len(validators) == 0 {
 		return false
 	}
-	expected := SelectValidator(block.Height, validators)
-	if !bytes.Equal(expected, block.Validator) {
-		return false
-	}
-	if len(block.Signature) != 64 || len(block.Validator) != 64 {
-		return false
-	}
-	r, s := decodeSig(block.Signature)
-	x, y := decodePubKey(block.Validator)
-	curve := elliptic.P256()
-	pubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-	return ecdsa.Verify(&pubKey, block.Hash, &r, &s)
+	return countValidSigs(block, validators) >= QuorumThreshold(len(validators))
 }
 
-// ValidateBlockStandalone verifies a block's PoA signature against a given validator list
+// ValidateBlockStandalone verifies a block's quorum against a given validator list
 // (does not require a DB — used for P2P sync validation).
 func ValidateBlockStandalone(block *Block, validators [][]byte) bool {
 	if len(validators) == 0 {
 		return false
 	}
-	expected := SelectValidator(block.Height, validators)
-	if !bytes.Equal(expected, block.Validator) {
-		return false
-	}
-	if len(block.Signature) != 64 || len(block.Validator) != 64 {
-		return false
-	}
-	r, s := decodeSig(block.Signature)
-	x, y := decodePubKey(block.Validator)
-	curve := elliptic.P256()
-	pubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
-	return ecdsa.Verify(&pubKey, block.Hash, &r, &s)
+	return countValidSigs(block, validators) >= QuorumThreshold(len(validators))
 }

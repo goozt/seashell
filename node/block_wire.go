@@ -7,22 +7,27 @@ import (
 	"github.com/goozt/seashell/blockchain"
 )
 
+// SerializedValidatorSig is the JSON-safe wire format for a ValidatorSig.
+type SerializedValidatorSig struct {
+	PubKey string `json:"pub_key"`
+	Sig    string `json:"sig"`
+}
+
 // SerializedBlock is the JSON-safe wire format for a Block.
 // blockchain.Block contains []byte fields that must be hex-encoded for JSON.
 type SerializedBlock struct {
-	Hash         string              `json:"hash"`
-	PrevHash     string              `json:"prev_hash"`
-	Height       uint64              `json:"height"`
-	Timestamp    uint                `json:"timestamp"`
-	Validator    string              `json:"validator"`
-	Signature    string              `json:"signature"`
-	Transactions []SerializedTx      `json:"transactions"`
+	Hash         string                   `json:"hash"`
+	PrevHash     string                   `json:"prev_hash"`
+	Height       uint64                   `json:"height"`
+	Timestamp    uint                     `json:"timestamp"`
+	Signatures   []SerializedValidatorSig `json:"signatures"`
+	Transactions []SerializedTx           `json:"transactions"`
 }
 
 // SerializedTx is the JSON-safe wire format for a Transaction.
 type SerializedTx struct {
-	ID      string              `json:"id"`
-	Inputs  []SerializedTxInput `json:"inputs"`
+	ID      string               `json:"id"`
+	Inputs  []SerializedTxInput  `json:"inputs"`
 	Outputs []SerializedTxOutput `json:"outputs"`
 }
 
@@ -47,8 +52,12 @@ func encodeBlock(b *blockchain.Block) *SerializedBlock {
 		PrevHash:  hex.EncodeToString(b.PrevHash),
 		Height:    b.Height,
 		Timestamp: b.Timestamp,
-		Validator: hex.EncodeToString(b.Validator),
-		Signature: hex.EncodeToString(b.Signature),
+	}
+	for _, vs := range b.Signatures {
+		sb.Signatures = append(sb.Signatures, SerializedValidatorSig{
+			PubKey: hex.EncodeToString(vs.PubKey),
+			Sig:    hex.EncodeToString(vs.Sig),
+		})
 	}
 	for _, tx := range b.Transactions {
 		stx := SerializedTx{ID: hex.EncodeToString(tx.Id)}
@@ -81,22 +90,23 @@ func (sb *SerializedBlock) Decode() (*blockchain.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode prevHash: %w", err)
 	}
-	validatorB, err := hex.DecodeString(sb.Validator)
-	if err != nil {
-		return nil, fmt.Errorf("decode validator: %w", err)
-	}
-	sigB, err := hex.DecodeString(sb.Signature)
-	if err != nil {
-		return nil, fmt.Errorf("decode signature: %w", err)
-	}
 
 	block := &blockchain.Block{
 		Hash:      hashB,
 		PrevHash:  prevHashB,
 		Height:    sb.Height,
 		Timestamp: sb.Timestamp,
-		Validator: validatorB,
-		Signature: sigB,
+	}
+	for _, svs := range sb.Signatures {
+		pubKey, err := hex.DecodeString(svs.PubKey)
+		if err != nil {
+			return nil, fmt.Errorf("decode sig pubkey: %w", err)
+		}
+		sig, err := hex.DecodeString(svs.Sig)
+		if err != nil {
+			return nil, fmt.Errorf("decode sig: %w", err)
+		}
+		block.Signatures = append(block.Signatures, blockchain.ValidatorSig{PubKey: pubKey, Sig: sig})
 	}
 
 	for _, stx := range sb.Transactions {

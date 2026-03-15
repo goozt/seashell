@@ -5,10 +5,15 @@ package node
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/goozt/seashell/blockchain"
@@ -151,4 +156,52 @@ func (c *PeerClient) GetValidators() ([]string, error) {
 		return nil, err
 	}
 	return out.Validators, nil
+}
+
+// RequestCoSign sends a co-sign request to a specific node URL and returns its ValidatorSig.
+// Implements service.PeerCoSigner.
+func (c *PeerClient) RequestCoSign(ctx context.Context, nodeURL string, req model.CoSignRequest) (blockchain.ValidatorSig, error) {
+	peer := &PeerClient{baseURL: nodeURL, secret: c.secret, httpClient: c.httpClient}
+	var resp model.CoSignResponse
+	if err := peer.do("POST", "/p2p/v1/cosign", req, &resp); err != nil {
+		return blockchain.ValidatorSig{}, fmt.Errorf("cosign %s: %w", nodeURL, err)
+	}
+	pubKey, err := hex.DecodeString(resp.PubKey)
+	if err != nil {
+		return blockchain.ValidatorSig{}, fmt.Errorf("decode pubkey: %w", err)
+	}
+	sig, err := hex.DecodeString(resp.Sig)
+	if err != nil {
+		return blockchain.ValidatorSig{}, fmt.Errorf("decode sig: %w", err)
+	}
+	return blockchain.ValidatorSig{PubKey: pubKey, Sig: sig}, nil
+}
+
+// NewMTLSPeerClient creates a PeerClient that authenticates with mutual TLS.
+// certFile/keyFile are this node's client cert/key; caCertFile is the CA to trust.
+func NewMTLSPeerClient(baseURL, secret, certFile, keyFile, caCertFile string) (*PeerClient, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load client cert: %w", err)
+	}
+	caPEM, err := os.ReadFile(caCertFile)
+	if err != nil {
+		return nil, fmt.Errorf("read CA cert: %w", err)
+	}
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("parse CA cert")
+	}
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      caPool,
+	}
+	return &PeerClient{
+		baseURL: baseURL,
+		secret:  secret,
+		httpClient: &http.Client{
+			Timeout:   p2pTimeout,
+			Transport: &http.Transport{TLSClientConfig: tlsCfg},
+		},
+	}, nil
 }
