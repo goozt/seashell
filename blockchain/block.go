@@ -2,10 +2,12 @@ package blockchain
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/gob"
 	"time"
-
-	"crypto/sha256"
 )
 
 type Block struct {
@@ -13,27 +15,40 @@ type Block struct {
 	PrevHash     []byte
 	Transactions []*Transaction
 	Hash         []byte
-	Nonce        int
+	Height       uint64
+	Validator    []byte
+	Signature    []byte
 }
 
-func Genesis(coinbase *Transaction) *Block {
-	return NewBlock([]*Transaction{coinbase}, []byte{})
+func Genesis(coinbase *Transaction, pubKey []byte, privKey ecdsa.PrivateKey) *Block {
+	return NewBlock([]*Transaction{coinbase}, []byte{}, 0, pubKey, privKey)
 }
 
-func NewBlock(txs []*Transaction, prevHash []byte) *Block {
+func NewBlock(txs []*Transaction, prevHash []byte, height uint64, pubKey []byte, privKey ecdsa.PrivateKey) *Block {
 	block := &Block{
 		Timestamp:    uint(time.Now().Unix()),
 		PrevHash:     prevHash,
 		Transactions: txs,
-		Nonce:        0,
+		Height:       height,
+		Validator:    pubKey,
 	}
-	pow := NewProof(block)
-	nonce, hash := pow.Run()
+	block.Hash = block.computeHash()
 
-	block.Hash = hash
-	block.Nonce = nonce
+	r, s, err := ecdsa.Sign(rand.Reader, &privKey, block.Hash)
+	HandleFatalErrors(err)
+	block.Signature = append(r.Bytes(), s.Bytes()...)
 
 	return block
+}
+
+func (b *Block) computeHash() []byte {
+	heightBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(heightBytes, b.Height)
+	tsBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(tsBytes, uint64(b.Timestamp))
+	data := bytes.Join([][]byte{b.PrevHash, b.HashTransaction(), tsBytes, heightBytes}, []byte{})
+	hash := sha256.Sum256(data)
+	return hash[:]
 }
 
 func (b *Block) HashTransaction() []byte {

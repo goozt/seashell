@@ -19,6 +19,7 @@ func (cli *CommandLine) usage() {
 	fmt.Println(" list")
 	fmt.Println(" wallet")
 	fmt.Println(" walletlist")
+	fmt.Println(" addvalidator -a ADDRESS")
 }
 
 func (cli *CommandLine) validateArgs() {
@@ -37,12 +38,14 @@ func (cli *CommandLine) Run() {
 	listCmd := flag.NewFlagSet("list", flag.ExitOnError)
 	createWalletCmd := flag.NewFlagSet("wallet", flag.ExitOnError)
 	listaddrsCmd := flag.NewFlagSet("walletlist", flag.ExitOnError)
+	addValidatorCmd := flag.NewFlagSet("addvalidator", flag.ExitOnError)
 
 	createAddress := createCmd.String("a", "", "Address to create blockchain")
 	balanceAddress := balanceCmd.String("a", "", "Address to get balance from blockchain")
 	sendFrom := sendCmd.String("from", "", "Address of sender")
 	sendTo := sendCmd.String("to", "", "Address of receiver")
 	sendAmount := sendCmd.Int("amount", 0, "Amount sent")
+	addValidatorAddress := addValidatorCmd.String("a", "", "Address to register as validator")
 
 	switch os.Args[1] {
 	case "create":
@@ -62,6 +65,9 @@ func (cli *CommandLine) Run() {
 		blockchain.HandleFatalErrors(err)
 	case "walletlist":
 		err := listaddrsCmd.Parse(os.Args[2:])
+		blockchain.HandleFatalErrors(err)
+	case "addvalidator":
+		err := addValidatorCmd.Parse(os.Args[2:])
 		blockchain.HandleFatalErrors(err)
 	default:
 		cli.usage()
@@ -102,5 +108,13 @@ func (cli *CommandLine) Run() {
 
 	if listaddrsCmd.Parsed() {
 		cli.listAllAddresses()
+	}
+
+	if addValidatorCmd.Parsed() {
+		if *addValidatorAddress == "" {
+			addValidatorCmd.Usage()
+			runtime.Goexit()
+		}
+		cli.addvalidator(*addValidatorAddress)
 	}
 }

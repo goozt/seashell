@@ -14,7 +14,11 @@ func (cli *CommandLine) create(address string) {
 		log.Fatalln("address is not valid")
 	}
 
-	chain := blockchain.InitBlockChain(false, address)
+	walletDB, err := wallet.CreateWalletDB()
+	blockchain.HandleFatalErrors(err)
+	w := walletDB.GetWallet(address)
+
+	chain := blockchain.InitBlockChain(false, address, w.PublicKey, w.PrivateKey)
 	defer chain.Close()
 	fmt.Println("New blockchain created")
 }
@@ -46,11 +50,16 @@ func (cli *CommandLine) send(from, to string, amount int) {
 	if !wallet.ValidateAddress(to) {
 		log.Fatalln("to address is not valid")
 	}
+
+	walletDB, err := wallet.CreateWalletDB()
+	blockchain.HandleFatalErrors(err)
+	w := walletDB.GetWallet(from)
+
 	chain := blockchain.ContinueBlockChain(false, "")
 	defer chain.Close()
 
 	tx := blockchain.NewTransaction(from, to, amount, chain)
-	chain.AddBlock([]*blockchain.Transaction{tx})
+	chain.AddBlock([]*blockchain.Transaction{tx}, w.PublicKey, w.PrivateKey)
 
 	fmt.Println("Added new block")
 }
@@ -63,11 +72,11 @@ func (cli *CommandLine) list() {
 		block := iter.Next()
 
 		fmt.Printf("Block %x\n", block.Hash)
+		fmt.Printf("  Height: %d\n", block.Height)
 		fmt.Printf("  Timestamp: %d\n", block.Timestamp)
 		fmt.Printf("  PreviousHash: %x\n", block.PrevHash)
-
-		pow := blockchain.NewProof(block)
-		fmt.Printf("  Valid PoW: %s\n", strconv.FormatBool(pow.Validate()))
+		fmt.Printf("  Validator: %x\n", block.Validator)
+		fmt.Printf("  Valid PoA: %s\n", strconv.FormatBool(blockchain.ValidateBlock(block, chain.Database)))
 		for _, tx := range block.Transactions {
 			fmt.Println(tx)
 		}
@@ -76,4 +85,20 @@ func (cli *CommandLine) list() {
 			break
 		}
 	}
+}
+
+func (cli *CommandLine) addvalidator(address string) {
+	if !wallet.ValidateAddress(address) {
+		log.Fatalln("address is not valid")
+	}
+
+	walletDB, err := wallet.CreateWalletDB()
+	blockchain.HandleFatalErrors(err)
+	w := walletDB.GetWallet(address)
+
+	chain := blockchain.ContinueBlockChain(false, "")
+	defer chain.Close()
+
+	chain.AddValidator(w.PublicKey)
+	fmt.Printf("Validator added: %s\n", address)
 }

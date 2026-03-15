@@ -3,6 +3,7 @@ package blockchain
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -18,6 +19,7 @@ const (
 )
 
 var lastHashByte = []byte("lh")
+var heightKey = []byte("bh")
 
 type BlockChain struct {
 	LastHash []byte
@@ -29,7 +31,7 @@ type BlockChainIterator struct {
 	Database    *badger.DB
 }
 
-func InitBlockChain(enableLog bool, address string) *BlockChain {
+func InitBlockChain(enableLog bool, address string, pubKey []byte, privKey ecdsa.PrivateKey) *BlockChain {
 
 	if DbExists() {
 		fmt.Println("Blockchain already exists")
@@ -45,13 +47,21 @@ func InitBlockChain(enableLog bool, address string) *BlockChain {
 	db, err := badger.Open(opts)
 	HandleFatalErrors(err)
 
+	// Register the genesis creator as the first validator.
+	AddValidatorToDB(db, pubKey)
+
 	err = db.Update(func(txn *badger.Txn) error {
 		sstx := CoinbaseTx(address, genesisData)
-		gen := Genesis(sstx)
-		fmt.Println("Genesis proved!")
+		gen := Genesis(sstx, pubKey, privKey)
+		fmt.Println("Genesis created!")
 		err = txn.Set(gen.Hash, gen.Serialize())
 		HandleFatalErrors(err)
 		err = txn.Set(lastHashByte, gen.Hash)
+		HandleFatalErrors(err)
+		// Store initial chain height (genesis = 0).
+		heightBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(heightBytes, 0)
+		err = txn.Set(heightKey, heightBytes)
 		lastHash = gen.Hash
 		return err
 	})
@@ -93,7 +103,25 @@ func (chain *BlockChain) Close() error {
 	return chain.Database.Close()
 }
 
-func (chain *BlockChain) AddBlock(txs []*Transaction) {
+func (chain *BlockChain) getHeight() uint64 {
+	var height uint64
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		item, err := txn.Get(heightKey)
+		if err != nil {
+			return err
+		}
+		data, err := item.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		height = binary.BigEndian.Uint64(data)
+		return nil
+	})
+	HandleFatalErrors(err)
+	return height
+}
+
+func (chain *BlockChain) AddBlock(txs []*Transaction, pubKey []byte, privKey ecdsa.PrivateKey) {
 	var lastHash []byte
 
 	err := chain.Database.View(func(txn *badger.Txn) error {
@@ -104,14 +132,29 @@ func (chain *BlockChain) AddBlock(txs []*Transaction) {
 	})
 	HandleFatalErrors(err)
 
-	newBlock := NewBlock(txs, lastHash)
+	newHeight := chain.getHeight() + 1
+	newBlock := NewBlock(txs, lastHash, newHeight, pubKey, privKey)
+
+	if !ValidateBlock(newBlock, chain.Database) {
+		HandleFatalErrors(fmt.Errorf("block rejected: %x is not an authorized validator for height %d", pubKey, newHeight))
+	}
+
 	err = chain.Database.Update(func(txn *badger.Txn) error {
 		err = txn.Set(newBlock.Hash, newBlock.Serialize())
 		HandleFatalErrors(err)
 		err = txn.Set(lastHashByte, newBlock.Hash)
+		HandleFatalErrors(err)
+		heightBytes := make([]byte, 8)
+		binary.BigEndian.PutUint64(heightBytes, newHeight)
+		err = txn.Set(heightKey, heightBytes)
 		chain.LastHash = newBlock.Hash
 		return err
 	})
+	HandleFatalErrors(err)
+}
+
+func (chain *BlockChain) AddValidator(pubKey []byte) {
+	AddValidatorToDB(chain.Database, pubKey)
 }
 
 func (chain *BlockChain) FindUnspentTransactions(publicKeyHash []byte) []Transaction {
