@@ -15,6 +15,8 @@ import {
   FileQuestion,
   Star,
   Network,
+  Headset,
+  MessageSquareText
 } from "lucide-react";
 
 interface NavItem {
@@ -29,12 +31,12 @@ const navItems: NavItem[] = [
   { label: "Wallet", href: "/dashboard/wallet", icon: Wallet },
   { label: "Send", href: "/dashboard/transactions", icon: ArrowLeftRight },
   { label: "Authority", href: "/dashboard/authority", icon: Building2 },
-  { label: "Tickets", href: "/dashboard/tickets", icon: TicketCheck },
+  { label: "Support", href: "/dashboard/tickets", icon: MessageSquareText },
 ];
 
 const adminItems: NavItem[] = [
   { label: "Requests", href: "/admin/requests", icon: FileQuestion },
-  { label: "Tickets", href: "/admin/tickets", icon: TicketCheck },
+  { label: "Support", href: "/admin/tickets", icon: TicketCheck },
   { label: "Users", href: "/admin/users", icon: Users },
   { label: "Network", href: "/admin/network", icon: Network },
   { label: "Stats", href: "/admin", icon: ShieldCheck },
@@ -43,6 +45,7 @@ const adminItems: NavItem[] = [
 const superAdminItems: NavItem[] = [
   { label: "Dashboard", href: "/superadmin", icon: Star },
   { label: "Admins", href: "/superadmin/admins", icon: ShieldCheck },
+  { label: "Support", href: "/superadmin/tickets", icon: TicketCheck },
 ];
 
 export function MobileNav() {

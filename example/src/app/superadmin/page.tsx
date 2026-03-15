@@ -183,7 +183,7 @@ export default function SuperAdminPage() {
     { label: "Authorities", value: stats?.total_authorities, icon: Building2 },
     { label: "Active", value: stats?.active_authorities, icon: Star },
     { label: "Pending", value: stats?.pending_authorities, icon: Star },
-    { label: "Tickets", value: stats?.total_tickets, icon: Star },
+    { label: "Support", value: stats?.total_tickets, icon: Star },
   ];
 
   return (

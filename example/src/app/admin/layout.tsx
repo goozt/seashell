@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import { Header } from "@/components/layout/header";
@@ -9,14 +9,19 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
+    if (!mounted) return;
     if (!isAuthenticated) { router.replace("/login"); return; }
     if (user?.role !== "admin" && user?.role !== "superadmin") {
       router.replace("/dashboard");
     }
-  }, [isAuthenticated, user, router]);
+  }, [mounted, isAuthenticated, user, router]);
 
+  if (!mounted) return null;
   if (!isAuthenticated || (user?.role !== "admin" && user?.role !== "superadmin")) return null;
 
   return (

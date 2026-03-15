@@ -51,7 +51,7 @@ interface LogoLinkProps {
 export function LogoLink({ href = "/", iconSize = 28, className }: LogoLinkProps) {
   return (
     <Link href={href} className={cn("flex items-center gap-2", className)}>
-      <LogoIcon size={iconSize} />
+      <LogoIcon size={iconSize}  className="rounded-full shadow-sm" />
       <span className="font-bold text-base">SeaShell</span>
     </Link>
   );

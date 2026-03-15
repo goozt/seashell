@@ -7,10 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, User } from "lucide-react";
 import { LogoLink } from "@/components/layout/seashell-logo";
+import { NotificationCenter } from "@/components/layout/notification-center";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export function Header() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  useWebSocket();
+  usePushNotifications();
 
   async function handleLogout() {
     await authApi.logout();
@@ -28,13 +33,14 @@ export function Header() {
             <>
               <div className="hidden sm:flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">{user.username}</span>
+                <span className="text-sm font-medium">{(user.first_name || user.last_name) ? `${user.first_name} ${user.last_name}`.trim() : user.username}</span>
                 {user.role !== "user" && (
                   <Badge variant="secondary" className="text-xs capitalize">
                     {user.role}
                   </Badge>
                 )}
               </div>
+              <NotificationCenter />
               <Button
                 variant="ghost"
                 size="icon"

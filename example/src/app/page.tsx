@@ -33,7 +33,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <LogoIcon size={28} />
+            <LogoIcon size={28} className="rounded-full shadow-sm" />
             <span className="font-bold text-lg">SeaShell</span>
           </div>
           {isAuthenticated ? (
@@ -56,10 +56,10 @@ export default function HomePage() {
 
       <main className="px-4 py-6 space-y-6 max-w-2xl mx-auto">
         {/* Hero */}
-        <div className="text-center py-6 flex flex-col items-center">
-          <LogoWordmark width={220} height={165} />
+        <div className="text-center py-6 flex flex-col items-center gap-4">
+          <LogoWordmark width={220} height={165}  className="rounded-3xl shadow-md" />
           <p className="mt-1 text-muted-foreground text-sm">
-            A minimal educational blockchain explorer & management platform.
+            An cryptocurrency implementation in Go featuring a <strong>Proof of Authority</strong> blockchain, UTXO-based transactions, ECDSA wallets, a REST API with JWT authentication, and a multi-role management system.
           </p>
           {!isAuthenticated && (
             <div className="mt-4 flex gap-2 justify-center">

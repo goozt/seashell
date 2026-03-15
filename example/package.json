@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "setup": "npx shadcn@latest init --yes && npx shadcn@latest add button card badge input label textarea select tabs dialog sheet skeleton toast avatar dropdown-menu separator progress alert"
+    "setup": "npx shadcn@latest init --yes && npx shadcn@latest add button card badge input label textarea select tabs dialog sheet skeleton toast avatar dropdown-menu separator progress alert",
+    "gen:env": "node -e \"const c=require('crypto');['JWT_SECRET','NODE_SECRET'].forEach(k=>process.stdout.write(k+'=\\''+c.randomBytes(32).toString('hex')+'\\'\\n'));const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@!-_+=~^';let p='';while(p.length<32)c.randomBytes(1).forEach(b=>{if(b<210&&p.length<32)p+=a[b%70]});process.stdout.write('SUPERADMIN_PASSWORD=\\''+p+'\\'\\n')\""
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.10",
@@ -17,7 +18,6 @@
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-separator": "^1.1.7",
-    "@radix-ui/react-sheet": "^1.1.14",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@radix-ui/react-toast": "^1.2.14",
@@ -25,19 +25,21 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.514.0",
-    "next": "15.3.3",
+    "next": "^16.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.0",
     "tailwindcss-animate": "^1.0.7",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.27",
     "eslint": "^9",
-    "eslint-config-next": "15.3.3",
+    "eslint-config-next": "^16.1.6",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

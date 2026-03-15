@@ -2,16 +2,23 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { userApi } from "@/lib/api";
+import { userApi, kycApi } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Wallet, Copy, Check, Plus, RefreshCw } from "lucide-react";
+import { Wallet, Copy, Check, Plus, RefreshCw, ShieldOff } from "lucide-react";
+import Link from "next/link";
 
 export default function WalletPage() {
   const qc = useQueryClient();
   const [copied, setCopied] = useState(false);
+
+  const { data: kyc, isLoading: kycLoading } = useQuery({
+    queryKey: ["kyc"],
+    queryFn: kycApi.getMyKYC,
+    retry: false,
+  });
 
   const { data: wallet, isLoading, error } = useQuery({
     queryKey: ["wallet"],
@@ -31,6 +38,8 @@ export default function WalletPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const kycVerified = kyc?.status === "verified";
+
   return (
     <div className="space-y-5">
       <div>
@@ -39,6 +48,16 @@ export default function WalletPage() {
         </h1>
         <p className="text-sm text-muted-foreground">Manage your SHELL balance and address.</p>
       </div>
+
+      {!kycLoading && !kycVerified && (
+        <Alert>
+          <ShieldOff className="h-4 w-4" />
+          <AlertDescription>
+            Identity verification required before creating a wallet.{" "}
+            <Link href="/dashboard/kyc" className="underline font-medium">Verify now →</Link>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {isLoading ? (
         <Card>
@@ -101,7 +120,7 @@ export default function WalletPage() {
             )}
             <Button
               onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || !kycVerified}
             >
               <Plus className="mr-2 h-4 w-4" />
               {createMutation.isPending ? "Creating…" : "Create Wallet"}

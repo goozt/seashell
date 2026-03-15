@@ -94,9 +94,9 @@ export default function NetworkPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className={`text-3xl font-bold ${color}`}>
+              <div className={`text-3xl font-bold ${color}`}>
                 {isLoading ? <Skeleton className="h-8 w-10" /> : value}
-              </p>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -122,6 +122,7 @@ export default function NetworkPage() {
                 <thead>
                   <tr className="border-b text-muted-foreground">
                     <th className="text-left py-2 pr-4 font-medium">Node</th>
+                    <th className="text-left py-2 pr-4 font-medium">Tier</th>
                     <th className="text-left py-2 pr-4 font-medium">Status</th>
                     <th className="text-left py-2 pr-4 font-medium">Height</th>
                     <th className="text-left py-2 pr-4 font-medium">URL</th>
@@ -141,6 +142,15 @@ export default function NetworkPage() {
                           )}
                           {n.authority_name}
                         </Link>
+                      </td>
+                      <td className="py-3 pr-4">
+                        {n.node_tier ? (
+                          <Badge variant={n.node_tier === "primary" ? "default" : n.node_tier === "regional" ? "secondary" : "outline"}>
+                            {n.node_tier}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
                       </td>
                       <td className="py-3 pr-4">
                         <NodeStatusBadge status={n.status} />

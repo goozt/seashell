@@ -26,7 +26,7 @@ export default function AdminDashboard() {
   const statItems = [
     { label: "Total Users", value: stats?.total_users, icon: Users },
     { label: "Authorities", value: stats?.total_authorities, icon: Building2 },
-    { label: "Tickets", value: stats?.total_tickets, icon: TicketCheck },
+    { label: "Support", value: stats?.total_tickets, icon: TicketCheck },
   ];
 
   return (

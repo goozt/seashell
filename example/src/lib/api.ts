@@ -1,11 +1,15 @@
 import type {
   AdminStats,
   ApiResponse,
+  ArchiveMeta,
+  ArchivedBlock,
   AuthData,
   Authority,
   AuthorityStats,
   Block,
   Invitation,
+  KYCRecord,
+  KYCSummary,
   NetworkNode,
   NodeJoinRequest,
   SuperAdminStats,
@@ -279,6 +283,24 @@ export const adminApi = {
       body: JSON.stringify(body),
     }),
 
+  // Escalate a node-level ticket to regional admin
+  escalateToRegional: (id: string, note?: string) =>
+    request<Ticket>(`/admin/tickets/${id}/escalate`, {
+      method: "POST",
+      body: JSON.stringify({ note: note ?? "" }),
+    }),
+
+  // Get tickets escalated to regional level
+  getRegionalTickets: () =>
+    request<Ticket[]>("/admin/tickets/regional"),
+
+  // Escalate a regional ticket to superadmin
+  escalateToSuper: (id: string, note?: string) =>
+    request<Ticket>(`/admin/tickets/${id}/escalate-super`, {
+      method: "POST",
+      body: JSON.stringify({ note: note ?? "" }),
+    }),
+
   getAuthorities: () => request<Authority[]>("/admin/authorities"),
 
   getUsers: () => request<User[]>("/admin/users"),
@@ -315,6 +337,19 @@ export const superAdminApi = {
     }),
 
   getStats: () => request<SuperAdminStats>("/superadmin/stats"),
+
+  // Tickets escalated to superadmin
+  getTickets: () => request<Ticket[]>("/superadmin/tickets"),
+  replyTicket: (id: string, body: { message: string }) =>
+    request<Ticket>(`/superadmin/tickets/${id}/reply`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateTicket: (id: string, body: { status: string }) =>
+    request<Ticket>(`/superadmin/tickets/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 };
 
 // ---------------------------------------------------------------------------
@@ -355,4 +390,54 @@ export const nodeApi = {
   // SuperAdmin: reinstate a node
   reinstateNode: (id: string) =>
     request<NetworkNode>(`/superadmin/nodes/${id}/reinstate`, { method: "POST" }),
+
+  // Admin: list nodes by tier
+  getNodesByTier: (tier: string) =>
+    request<{ nodes: NetworkNode[]; tier: string }>(`/admin/nodes/tier/${tier}`),
+};
+
+// ---------------------------------------------------------------------------
+// KYC
+// ---------------------------------------------------------------------------
+
+export const kycApi = {
+  // User: initiate KYC verification
+  initiateKYC: (body: { national_id: string; tax_id?: string }) =>
+    request<KYCRecord>("/user/kyc", { method: "POST", body: JSON.stringify(body) }),
+
+  // User: get own KYC status
+  getMyKYC: () => request<KYCRecord>("/user/kyc"),
+
+  // Admin: list all KYC records (optionally filter by status)
+  listKYC: (status?: string) =>
+    request<{ records: KYCRecord[] }>(`/admin/kyc${status ? `?status=${status}` : ""}`),
+
+  // Admin: reject a KYC record
+  rejectKYC: (userID: string, reason: string) =>
+    request<KYCRecord>(`/admin/kyc/${userID}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  // Admin: KYC summary for this node
+  getSummary: () => request<KYCSummary>("/admin/kyc/summary"),
+};
+
+// ---------------------------------------------------------------------------
+// Archive
+// ---------------------------------------------------------------------------
+
+export const archiveApi = {
+  // Admin: archive statistics
+  getStats: () => request<ArchiveMeta>("/admin/archive/stats"),
+
+  // Admin: fetch a single archived block by height
+  getBlock: (height: number) =>
+    request<ArchivedBlock>(`/admin/archive/blocks/${height}`),
+
+  // Admin: fetch a range of archived blocks
+  getRange: (from: number, to: number) =>
+    request<{ blocks: ArchivedBlock[]; total: number }>(
+      `/admin/archive/blocks?from=${from}&to=${to}`
+    ),
 };

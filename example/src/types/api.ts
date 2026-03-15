@@ -16,6 +16,8 @@ export interface TokenPair {
 export interface User {
   id: string;
   username: string;
+  first_name: string;
+  last_name: string;
   email: string;
   role: "user" | "admin" | "superadmin";
   authority_id?: string;
@@ -24,6 +26,13 @@ export interface User {
   active: boolean;
   created_at: string;
   updated_at: string;
+  // KYC fields
+  kyc_status?: KYCStatus;
+  national_id_masked?: string;
+  tax_id_masked?: string;
+  verified_name?: string;
+  kyc_verified_at?: string;
+  kyc_rejected_reason?: string;
 }
 
 export interface AuthData {
@@ -113,9 +122,12 @@ export interface Invitation {
 export interface TicketReply {
   author_id: string;
   author_username?: string;
+  author_role?: string;
   message: string;
   created_at: string;
 }
+
+export type TicketLevel = "node" | "regional" | "superadmin";
 
 export interface Ticket {
   id: string;
@@ -124,6 +136,8 @@ export interface Ticket {
   title: string;
   description?: string;
   status: "open" | "in_progress" | "resolved" | "closed";
+  escalated_to?: TicketLevel;
+  escalation_note?: string;
   replies: TicketReply[];
   created_at: string;
   updated_at: string;
@@ -162,6 +176,11 @@ export interface NetworkNode {
   approved_at?: string;
   approved_by?: string;
   rejection_reason?: string;
+  // 3-tier topology fields
+  node_tier?: "primary" | "regional" | "branch";
+  parent_node_id?: string;
+  parent_node_url?: string;
+  cert_fingerprint?: string;
 }
 
 export interface NodeJoinRequest {
@@ -182,4 +201,54 @@ export interface NetworkStats {
   active: number;
   offline: number;
   pending: number;
+}
+
+// ── KYC ───────────────────────────────────────────────────────────────────────
+
+export type KYCStatus = "unverified" | "pending" | "verified" | "rejected";
+
+export interface KYCRecord {
+  user_id: string;
+  national_id_masked: string;
+  tax_id_masked?: string;
+  status: KYCStatus;
+  verified_name?: string;
+  verified_at?: string;
+  rejected_reason?: string;
+  node_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KYCSummary {
+  node_id: string;
+  total: number;
+  verified: number;
+  pending: number;
+  rejected: number;
+  unverified: number;
+}
+
+// ── Quorum ────────────────────────────────────────────────────────────────────
+
+export interface ValidatorSig {
+  pub_key: string;
+  sig: string;
+}
+
+// ── Archive ───────────────────────────────────────────────────────────────────
+
+export interface ArchiveMeta {
+  oldest_height: number;
+  newest_height: number;
+  total_blocks: number;
+  updated_at: string;
+}
+
+export interface ArchivedBlock {
+  hash: string;
+  prev_hash: string;
+  height: number;
+  timestamp: number;
+  signatures: ValidatorSig[];
 }

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { userApi } from "@/lib/api";
+import { wsEvents } from "@/hooks/useWebSocket";
+import type { Ticket } from "@/types/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +36,16 @@ export default function TicketDetailPage() {
     onError: (err: Error) => setError(err.message),
   });
 
+  useEffect(() => {
+    if (!ticket) return;
+    const unsub = wsEvents.onSupport(ticket.id, (_ticketId, reply) => {
+      qc.setQueryData(["ticket", id], (old: Ticket | undefined) =>
+        old ? { ...old, replies: [...old.replies, reply] } : old
+      );
+    });
+    return unsub;
+  }, [ticket?.id, qc, id]);
+
   if (isLoading) return (
     <div className="space-y-3">
       <Skeleton className="h-8 w-48" />
@@ -44,7 +56,7 @@ export default function TicketDetailPage() {
 
   if (!ticket) return (
     <div className="text-center py-12">
-      <p className="text-muted-foreground">Ticket not found.</p>
+      <p className="text-muted-foreground">Support request not found.</p>
       <Button asChild variant="outline" className="mt-4">
         <Link href="/dashboard/tickets">← Back</Link>
       </Button>
@@ -69,7 +81,7 @@ export default function TicketDetailPage() {
       {ticket.description && (
         <Card>
           <CardContent className="py-3 px-4">
-            <p className="text-sm text-muted-foreground whitespace-pre-wrap">{ticket.description}</p>
+            <p className="text-sm whitespace-pre-wrap">{ticket.description}</p>
           </CardContent>
         </Card>
       )}
@@ -83,7 +95,7 @@ export default function TicketDetailPage() {
           <Card key={idx}>
             <CardContent className="py-3 px-4">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-xs font-semibold">{reply.author_username ?? reply.author_id}</span>
+                <span className="text-xs font-semibold">{reply.author_username}</span>
                 <span className="text-xs text-muted-foreground">{formatDate(reply.created_at)}</span>
               </div>
               <p className="text-sm whitespace-pre-wrap">{reply.message}</p>

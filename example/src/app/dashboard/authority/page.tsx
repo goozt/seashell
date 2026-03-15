@@ -207,7 +207,7 @@ function StatsTab() {
     <div className="grid grid-cols-3 gap-3">
       {[
         { label: "Members", value: stats?.member_count ?? 0 },
-        { label: "Tickets", value: stats?.ticket_count ?? 0 },
+        { label: "Support", value: stats?.ticket_count ?? 0 },
         { label: "Price", value: `${stats?.current_price?.toFixed(4) ?? "0"} SHELL` },
       ].map(({ label, value }) => (
         <Card key={label}>

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { TicketCheck, Plus, Loader2, ChevronRight } from "lucide-react";
+import { MessageSquareText, Plus, Loader2, ChevronRight } from "lucide-react";
 import { statusColor, formatRelative } from "@/lib/utils";
 
 export default function TicketsPage() {
@@ -43,9 +43,9 @@ export default function TicketsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold flex items-center gap-2">
-            <TicketCheck className="h-5 w-5 text-primary" /> Tickets
+            <MessageSquareText className="h-5 w-5 text-primary" /> Support
           </h1>
-          <p className="text-sm text-muted-foreground">Submit and track support tickets.</p>
+          <p className="text-sm text-muted-foreground">Submit and track support requests.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -53,7 +53,7 @@ export default function TicketsPage() {
           </DialogTrigger>
           <DialogContent className="max-w-sm mx-auto">
             <DialogHeader>
-              <DialogTitle>New Support Ticket</DialogTitle>
+              <DialogTitle>New Support Request</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
               {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
@@ -80,7 +80,7 @@ export default function TicketsPage() {
                 disabled={createMutation.isPending || !form.title}
               >
                 {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Submit Ticket
+                Submit Request
               </Button>
             </div>
           </DialogContent>
@@ -116,8 +116,8 @@ export default function TicketsPage() {
         </div>
       ) : (
         <div className="text-center py-12 text-muted-foreground">
-          <TicketCheck className="h-10 w-10 mx-auto mb-3" />
-          <p className="text-sm">No tickets yet. Create one if you need help.</p>
+          <MessageSquareText className="h-10 w-10 mx-auto mb-3" />
+          <p className="text-sm">No support requests yet. Create one if you need help.</p>
         </div>
       )}
     </div>

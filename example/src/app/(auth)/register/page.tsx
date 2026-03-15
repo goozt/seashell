@@ -16,7 +16,7 @@ import { LogoWordmark } from "@/components/layout/seashell-logo";
 export default function RegisterPage() {
   const router = useRouter();
   const setUser = useAuthStore((s) => s.setUser);
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
+  const [form, setForm] = useState({ username: "", first_name: "", last_name: "", email: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -44,7 +44,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 bg-background">
       <div className="w-full max-w-sm space-y-6">
         <div className="flex flex-col items-center">
-          <LogoWordmark width={180} height={135} />
+          <LogoWordmark width={180} height={135} className="rounded-3xl shadow-md"/>
         </div>
 
         <Card>
@@ -59,11 +59,35 @@ export default function RegisterPage() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
+              <div className="flex gap-3">
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="first_name">First Name</Label>
+                  <Input
+                    id="first_name"
+                    placeholder="Jane"
+                    value={form.first_name}
+                    onChange={(e) => setForm((f) => ({ ...f, first_name: e.target.value }))}
+                    required
+                    autoComplete="given-name"
+                  />
+                </div>
+                <div className="space-y-2 flex-1">
+                  <Label htmlFor="last_name">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    placeholder="Smith"
+                    value={form.last_name}
+                    onChange={(e) => setForm((f) => ({ ...f, last_name: e.target.value }))}
+                    required
+                    autoComplete="family-name"
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
                 <Input
                   id="username"
-                  placeholder="satoshi"
+                  placeholder="janesmith"
                   value={form.username}
                   onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
                   required
