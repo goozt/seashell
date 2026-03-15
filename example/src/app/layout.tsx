@@ -9,6 +9,12 @@ export const metadata: Metadata = {
   title: "SeaShell",
   description: "Cryptocurrency ecosystem management",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/logo-icon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/logo-icon.svg",
+  },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "SeaShell" },
 };
 
@@ -16,7 +22,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#3b82f6",
+  themeColor: "#a78bfa",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

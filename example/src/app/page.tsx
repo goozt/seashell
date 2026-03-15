@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { truncateHash, formatRelative, statusColor } from "@/lib/utils";
-import { Layers, TrendingUp, Wifi, LogIn, LayoutDashboard } from "lucide-react";
+import { TrendingUp, Layers, LogIn, LayoutDashboard } from "lucide-react";
+import { LogoWordmark, LogoIcon } from "@/components/layout/seashell-logo";
 
 export default function HomePage() {
   const { isAuthenticated, user } = useAuthStore();
@@ -32,7 +33,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
         <div className="flex h-14 items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <Layers className="h-5 w-5 text-primary" />
+            <LogoIcon size={28} />
             <span className="font-bold text-lg">SeaShell</span>
           </div>
           {isAuthenticated ? (
@@ -55,9 +56,9 @@ export default function HomePage() {
 
       <main className="px-4 py-6 space-y-6 max-w-2xl mx-auto">
         {/* Hero */}
-        <div className="text-center py-6">
-          <h1 className="text-3xl font-bold tracking-tight">SeaShell</h1>
-          <p className="mt-2 text-muted-foreground text-sm">
+        <div className="text-center py-6 flex flex-col items-center">
+          <LogoWordmark width={220} height={165} />
+          <p className="mt-1 text-muted-foreground text-sm">
             A minimal educational blockchain explorer & management platform.
           </p>
           {!isAuthenticated && (

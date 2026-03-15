@@ -10,7 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Layers, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { LogoWordmark } from "@/components/layout/seashell-logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -38,9 +39,8 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12 bg-background">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-2">
-          <Layers className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">SeaShell</h1>
+        <div className="flex flex-col items-center">
+          <LogoWordmark width={180} height={135} />
         </div>
 
         <Card>

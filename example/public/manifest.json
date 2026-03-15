@@ -1,0 +1,17 @@
+{
+  "name": "SeaShell",
+  "short_name": "SeaShell",
+  "description": "Cryptocurrency ecosystem management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#d8d4f2",
+  "theme_color": "#a78bfa",
+  "icons": [
+    {
+      "src": "/logo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

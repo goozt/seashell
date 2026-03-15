@@ -5,8 +5,8 @@ import { authApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Layers, LogOut, User } from "lucide-react";
-import Link from "next/link";
+import { LogOut, User } from "lucide-react";
+import { LogoLink } from "@/components/layout/seashell-logo";
 
 export function Header() {
   const router = useRouter();
@@ -21,10 +21,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
       <div className="flex h-14 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2">
-          <Layers className="h-5 w-5 text-primary" />
-          <span className="font-bold">SeaShell</span>
-        </Link>
+        <LogoLink href="/" iconSize={28} />
 
         <div className="flex items-center gap-2">
           {user && (
