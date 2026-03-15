@@ -11,7 +11,7 @@ interface LogoIconProps {
 export function LogoIcon({ size = 32, className }: LogoIconProps) {
   return (
     <Image
-      src="/logo-icon.svg"
+      src="/logo-icon.png"
       alt="SeaShell"
       width={size}
       height={size}
@@ -31,7 +31,7 @@ interface LogoWordmarkProps {
 export function LogoWordmark({ width = 200, height = 150, className }: LogoWordmarkProps) {
   return (
     <Image
-      src="/logo-wordmark.svg"
+      src="/logo-wordmark.png"
       alt="SeaShell"
       width={width}
       height={height}

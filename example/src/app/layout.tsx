@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/logo-icon.svg", type: "image/svg+xml" },
+      { url: "/logo-icon.png", type: "image/png" },
     ],
-    apple: "/logo-icon.svg",
+    apple: "/logo-icon.png",
   },
   appleWebApp: { capable: true, statusBarStyle: "default", title: "SeaShell" },
 };

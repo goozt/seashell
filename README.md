@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="example/public/logo-wordmark.svg" alt="SeaShell" width="280"/>
+  <img src="example/public/logo-banner.png" alt="SeaShell"/>
 </p>
 
 An educational cryptocurrency implementation in Go featuring a **Proof of Authority** blockchain, UTXO-based transactions, ECDSA wallets, a REST API with JWT authentication, and a multi-role management system.
