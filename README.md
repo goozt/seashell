@@ -2,7 +2,7 @@
   <img src="example/public/logo-banner.png" alt="SeaShell"/>
 </p>
 
-An educational cryptocurrency implementation in Go featuring a **Proof of Authority** blockchain, UTXO-based transactions, ECDSA wallets, a REST API with JWT authentication, and a multi-role management system.
+An cryptocurrency implementation in Go featuring a **Proof of Authority** blockchain, UTXO-based transactions, ECDSA wallets, a REST API with JWT authentication, and a multi-role management system.
 
 ---
 
@@ -35,9 +35,27 @@ Requires Go 1.18+. Run `make build` the first time — it downloads Go 1.18 loca
 
 ### Quick Start
 
+**1. Generate secrets**
+
 ```bash
-export SUPERADMIN_PASSWORD=mysecretpassword
-export JWT_SECRET=my-jwt-secret
+cd example
+pnpm gen:env
+```
+
+This outputs ready-to-paste values for your `.env`:
+
+```
+JWT_SECRET='<hex>'
+NODE_SECRET='<hex>'
+SUPERADMIN_PASSWORD='<alphanumeric+symbols>'
+```
+
+Copy the output into a `.env` file at the repo root and fill in the remaining variables (see Configuration below).
+
+**2. Start the server**
+
+```bash
+set -a && source .env && set +a
 bin/seashell --api
 # SeaShell API server listening on :8080
 ```

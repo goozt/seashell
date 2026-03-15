@@ -1,3 +1,32 @@
+# Runtime data
 /db
 /tmp
 /bin
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Go
+*.test
+*.out
+coverage.txt
+
+# Next.js
+/example/.next/
+/example/out/
+/example/node_modules/
+/example/.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.claude/
+.vscode/
+.idea/
+
+# DB
+db_init.json
