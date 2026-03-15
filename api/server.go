@@ -26,10 +26,22 @@ func Start(cfg *config.Config) error {
 	authSvc := service.NewAuthService(db, cfg.JWTSecret, cfg.AccessTokenMinutes, cfg.RefreshTokenDays)
 	chainSvc := service.NewChainService(cfg.DBPath+"/blocks", db)
 	valueSvc := service.NewValueService(db)
+	nodeSvc := service.NewNodeService(db, chainSvc, cfg)
+
+	// Wire block-broadcast callback.
+	chainSvc.SetOnBlock(nodeSvc.OnBlockMined)
 
 	// Bootstrap superadmin if not present.
 	if err := authSvc.BootstrapSuperAdmin(cfg.SuperAdminPassword, cfg.SuperAdminEmail); err != nil {
 		return fmt.Errorf("bootstrap superadmin: %w", err)
+	}
+
+	// Bootstrap node identity (register self / wait for primary approval).
+	if cfg.NodeURL != "" {
+		if err := nodeSvc.Bootstrap(); err != nil {
+			return fmt.Errorf("bootstrap node: %w", err)
+		}
+		defer nodeSvc.Stop()
 	}
 
 	// Build handlers.
@@ -39,6 +51,7 @@ func Start(cfg *config.Config) error {
 	authorityOwnerH := handlers.NewAuthorityOwnerHandler(db, chainSvc, valueSvc)
 	adminH := handlers.NewAdminHandler(db, cfg.DBPath+"/blocks")
 	superAdminH := handlers.NewSuperAdminHandler(db, authSvc)
+	nodeH := handlers.NewNodeHandler(db, chainSvc, nodeSvc, cfg.IsPrimary, cfg.NodeURL)
 
 	// Build router.
 	r := chi.NewRouter()
@@ -52,6 +65,9 @@ func Start(cfg *config.Config) error {
 	r.Get("/api/v1/blocks", publicH.GetBlocks)
 	r.Get("/api/v1/blocks/{hash}", publicH.GetBlock)
 	r.Get("/api/v1/value", publicH.GetValue)
+
+	// Node registration (called by new nodes wishing to join).
+	r.Post("/api/v1/nodes/register", nodeH.RegisterNode)
 
 	// Auth routes.
 	r.Route("/api/v1/auth", func(r chi.Router) {
@@ -109,6 +125,9 @@ func Start(cfg *config.Config) error {
 		r.Get("/authorities", adminH.GetAuthoritiesAdmin)
 		r.Get("/users", adminH.GetUsersAdmin)
 		r.Get("/stats", adminH.GetStatsAdmin)
+		// Network node routes.
+		r.Get("/nodes", nodeH.GetNodes)
+		r.Get("/nodes/{id}", nodeH.GetNode)
 	})
 
 	// SuperAdmin routes.
@@ -121,6 +140,23 @@ func Start(cfg *config.Config) error {
 		r.Post("/authorities/{id}/suspend", superAdminH.SuspendAuthority)
 		r.Post("/authorities/{id}/reinstate", superAdminH.ReinstateAuthority)
 		r.Get("/stats", superAdminH.GetStatsSuperAdmin)
+		// Node management (primary node only).
+		r.Get("/node-requests", nodeH.GetNodeJoinRequests)
+		r.Post("/node-requests/{id}/approve", nodeH.ApproveNodeJoinRequest)
+		r.Post("/node-requests/{id}/reject", nodeH.RejectNodeJoinRequest)
+		r.Post("/nodes/{id}/suspend", nodeH.SuspendNode)
+		r.Post("/nodes/{id}/reinstate", nodeH.ReinstateNode)
+	})
+
+	// P2P routes (authenticated by shared node secret, not JWT).
+	r.Route("/p2p/v1", func(r chi.Router) {
+		r.Use(apimw.RequireNodeSecret(cfg.NodeSecret))
+		r.Post("/ping", nodeH.P2PPing)
+		r.Get("/peers", nodeH.P2PGetPeers)
+		r.Get("/chain/sync", nodeH.P2PGetChainSync)
+		r.Post("/blocks", nodeH.P2PReceiveBlock)
+		r.Get("/validators", nodeH.P2PGetValidators)
+		r.Post("/validators", nodeH.P2PReceiveValidator)
 	})
 
 	addr := ":" + cfg.Port

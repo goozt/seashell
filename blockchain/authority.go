@@ -69,8 +69,31 @@ func ValidateBlock(block *Block, db *badger.DB) bool {
 	if !bytes.Equal(expected, block.Validator) {
 		return false
 	}
-	r, s := SplitBinary(block.Signature)
-	x, y := SplitBinary(block.Validator)
+	if len(block.Signature) != 64 || len(block.Validator) != 64 {
+		return false
+	}
+	r, s := decodeSig(block.Signature)
+	x, y := decodePubKey(block.Validator)
+	curve := elliptic.P256()
+	pubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
+	return ecdsa.Verify(&pubKey, block.Hash, &r, &s)
+}
+
+// ValidateBlockStandalone verifies a block's PoA signature against a given validator list
+// (does not require a DB — used for P2P sync validation).
+func ValidateBlockStandalone(block *Block, validators [][]byte) bool {
+	if len(validators) == 0 {
+		return false
+	}
+	expected := SelectValidator(block.Height, validators)
+	if !bytes.Equal(expected, block.Validator) {
+		return false
+	}
+	if len(block.Signature) != 64 || len(block.Validator) != 64 {
+		return false
+	}
+	r, s := decodeSig(block.Signature)
+	x, y := decodePubKey(block.Validator)
 	curve := elliptic.P256()
 	pubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
 	return ecdsa.Verify(&pubKey, block.Hash, &r, &s)

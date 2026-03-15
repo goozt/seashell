@@ -36,7 +36,7 @@ func NewBlock(txs []*Transaction, prevHash []byte, height uint64, pubKey []byte,
 
 	r, s, err := ecdsa.Sign(rand.Reader, &privKey, block.Hash)
 	HandleFatalErrors(err)
-	block.Signature = append(r.Bytes(), s.Bytes()...)
+	block.Signature = encodeSig(r, s)
 
 	return block
 }

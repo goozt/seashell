@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { superAdminApi, adminApi } from "@/lib/api";
+import { superAdminApi, adminApi, nodeApi } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,98 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { statusColor } from "@/lib/utils";
-import { Star, ShieldCheck, Building2, Users, Plus, Trash2, Loader2, PauseCircle, PlayCircle } from "lucide-react";
+import {
+  Star, ShieldCheck, Building2, Users, Plus, Trash2, Loader2,
+  PauseCircle, PlayCircle, Network, CheckCircle2, XCircle,
+} from "lucide-react";
+import type { NodeJoinRequest } from "@/types/api";
+
+function relativeTime(ts?: string): string {
+  if (!ts) return "—";
+  const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
+function NodeRequestRow({
+  req,
+  onApprove,
+  onReject,
+  loading,
+}: {
+  req: NodeJoinRequest;
+  onApprove: (id: string) => void;
+  onReject: (id: string, reason: string) => void;
+  loading: boolean;
+}) {
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [reason, setReason] = useState("");
+
+  return (
+    <Card>
+      <CardContent className="py-3 px-4 space-y-2">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="font-medium text-sm">{req.authority_name}</p>
+            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{req.node_url}</p>
+            <p className="text-xs text-muted-foreground">{req.admin_email}</p>
+          </div>
+          <div className="text-right">
+            <Badge variant={req.status === "pending" ? "secondary" : req.status === "approved" ? "default" : "destructive"}>
+              {req.status}
+            </Badge>
+            <p className="text-xs text-muted-foreground mt-1">{relativeTime(req.created_at)}</p>
+          </div>
+        </div>
+
+        {req.status === "pending" && (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1"
+              onClick={() => onApprove(req.id)}
+              disabled={loading}
+            >
+              <CheckCircle2 className="mr-1 h-4 w-4" /> Approve
+            </Button>
+            <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline" className="flex-1">
+                  <XCircle className="mr-1 h-4 w-4 text-destructive" /> Reject
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm mx-auto">
+                <DialogHeader>
+                  <DialogTitle>Reject Node Request</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-2">
+                  <div className="space-y-2">
+                    <Label>Reason (optional)</Label>
+                    <Input
+                      placeholder="e.g. Unable to verify authority"
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    onClick={() => { onReject(req.id, reason); setRejectOpen(false); }}
+                    disabled={loading}
+                  >
+                    Confirm Rejection
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SuperAdminPage() {
   const qc = useQueryClient();
@@ -32,6 +123,15 @@ export default function SuperAdminPage() {
     queryKey: ["all-authorities"],
     queryFn: adminApi.getAuthorities,
   });
+
+  const { data: nodeReqData, isLoading: nodeReqLoading } = useQuery({
+    queryKey: ["superadmin", "node-requests"],
+    queryFn: nodeApi.getNodeRequests,
+    refetchInterval: 30_000,
+  });
+
+  const nodeRequests: NodeJoinRequest[] = nodeReqData?.requests ?? [];
+  const pendingNodeCount = nodeRequests.filter((r) => r.status === "pending").length;
 
   const [newAdmin, setNewAdmin] = useState({ username: "", email: "", password: "" });
   const [adminDialogOpen, setAdminDialogOpen] = useState(false);
@@ -64,6 +164,17 @@ export default function SuperAdminPage() {
   const reinstateMutation = useMutation({
     mutationFn: superAdminApi.reinstateAuthority,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["all-authorities"] }),
+  });
+
+  const approveNodeMutation = useMutation({
+    mutationFn: (id: string) => nodeApi.approveNodeRequest(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["superadmin", "node-requests"] }),
+  });
+
+  const rejectNodeMutation = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      nodeApi.rejectNodeRequest(id, reason),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["superadmin", "node-requests"] }),
   });
 
   const statItems = [
@@ -104,6 +215,15 @@ export default function SuperAdminPage() {
         <TabsList className="w-full">
           <TabsTrigger value="admins" className="flex-1">Admins</TabsTrigger>
           <TabsTrigger value="authorities" className="flex-1">Authorities</TabsTrigger>
+          <TabsTrigger value="node-requests" className="flex-1 relative">
+            <Network className="mr-1 h-3.5 w-3.5" />
+            Nodes
+            {pendingNodeCount > 0 && (
+              <span className="ml-1 bg-primary text-primary-foreground text-[10px] rounded-full px-1.5 py-0.5">
+                {pendingNodeCount}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Admins Tab */}
@@ -220,6 +340,34 @@ export default function SuperAdminPage() {
                     </div>
                   </CardContent>
                 </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Node Requests Tab (primary node only) */}
+        <TabsContent value="node-requests" className="space-y-3 mt-3">
+          <p className="text-xs text-muted-foreground">
+            New authorities submit join requests here. Approving adds their validator key to the
+            blockchain network and distributes it to all active nodes.
+          </p>
+
+          {nodeReqLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map((i) => <Skeleton key={i} className="h-28 rounded-lg" />)}
+            </div>
+          ) : nodeRequests.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No node requests yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {nodeRequests.map((req) => (
+                <NodeRequestRow
+                  key={req.id}
+                  req={req}
+                  loading={approveNodeMutation.isPending || rejectNodeMutation.isPending}
+                  onApprove={(id) => approveNodeMutation.mutate(id)}
+                  onReject={(id, reason) => rejectNodeMutation.mutate({ id, reason })}
+                />
               ))}
             </div>
           )}

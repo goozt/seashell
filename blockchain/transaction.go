@@ -2,17 +2,15 @@ package blockchain
 
 import (
 	"bytes"
-	"encoding/gob"
-	"encoding/hex"
-	"fmt"
-	"log"
-	"math/big"
-	"strings"
-
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/gob"
+	"encoding/hex"
+	"fmt"
+	"log"
+	"strings"
 
 	"github.com/goozt/seashell/wallet"
 )
@@ -134,10 +132,9 @@ func (tx *Transaction) Sign(privateKey ecdsa.PrivateKey, prevTxs map[string]Tran
 
 		r, s, err := ecdsa.Sign(rand.Reader, &privateKey, txCopy.Id)
 		HandleFatalErrors(err)
-		signature := append(r.Bytes(), s.Bytes()...)
-		tx.Inputs[inId].Signature = signature
+		// Use fixed-width 64-byte encoding to avoid variable-length r/s split bugs.
+		tx.Inputs[inId].Signature = encodeSig(r, s)
 	}
-
 }
 
 func (tx *Transaction) TrimmedCopy() *Transaction {
@@ -155,13 +152,6 @@ func (tx *Transaction) TrimmedCopy() *Transaction {
 	txCopy := Transaction{tx.Id, inputs, outputs}
 
 	return &txCopy
-}
-
-func SplitBinary(data []byte) (a big.Int, b big.Int) {
-	length := len(data)
-	a.SetBytes(data[:(length / 2)])
-	b.SetBytes(data[(length / 2):])
-	return a, b
 }
 
 func (tx *Transaction) Verify(prevTxs map[string]Transaction) bool {
@@ -185,8 +175,11 @@ func (tx *Transaction) Verify(prevTxs map[string]Transaction) bool {
 		txCopy.Id = txCopy.Hash()
 		txCopy.Inputs[inId].PubKey = nil
 
-		r, s := SplitBinary(in.Signature)
-		x, y := SplitBinary(in.PubKey)
+		if len(in.Signature) != 64 || len(in.PubKey) != 64 {
+			return false
+		}
+		r, s := decodeSig(in.Signature)
+		x, y := decodePubKey(in.PubKey)
 
 		rawPubKey := ecdsa.PublicKey{Curve: curve, X: &x, Y: &y}
 		if !ecdsa.Verify(&rawPubKey, txCopy.Id, &r, &s) {

@@ -6,6 +6,8 @@ import type {
   AuthorityStats,
   Block,
   Invitation,
+  NetworkNode,
+  NodeJoinRequest,
   SuperAdminStats,
   Ticket,
   TokenPair,
@@ -313,4 +315,44 @@ export const superAdminApi = {
     }),
 
   getStats: () => request<SuperAdminStats>("/superadmin/stats"),
+};
+
+// ---------------------------------------------------------------------------
+// Node / Network API
+// ---------------------------------------------------------------------------
+
+export const nodeApi = {
+  // Admin: list all nodes
+  getNodes: () =>
+    request<{ nodes: NetworkNode[] }>("/admin/nodes"),
+
+  // Admin: get single node
+  getNode: (id: string) =>
+    request<NetworkNode>(`/admin/nodes/${id}`),
+
+  // SuperAdmin (primary only): pending node join requests
+  getNodeRequests: () =>
+    request<{ requests: NodeJoinRequest[] }>("/superadmin/node-requests"),
+
+  // SuperAdmin: approve a node join request
+  approveNodeRequest: (id: string) =>
+    request<{ node_id: string; peers: NetworkNode[] }>(
+      `/superadmin/node-requests/${id}/approve`,
+      { method: "POST" }
+    ),
+
+  // SuperAdmin: reject a node join request
+  rejectNodeRequest: (id: string, reason?: string) =>
+    request<{ message: string }>(`/superadmin/node-requests/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? "" }),
+    }),
+
+  // SuperAdmin: suspend a node
+  suspendNode: (id: string) =>
+    request<NetworkNode>(`/superadmin/nodes/${id}/suspend`, { method: "POST" }),
+
+  // SuperAdmin: reinstate a node
+  reinstateNode: (id: string) =>
+    request<NetworkNode>(`/superadmin/nodes/${id}/reinstate`, { method: "POST" }),
 };

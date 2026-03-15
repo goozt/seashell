@@ -142,3 +142,44 @@ export interface SuperAdminStats extends AdminStats {
   active_authorities: number;
   pending_authorities: number;
 }
+
+// ── Network Nodes ─────────────────────────────────────────────────────────────
+
+export type NodeStatus = "pending" | "active" | "offline" | "suspended" | "rejected";
+
+export interface NetworkNode {
+  id: string;
+  authority_id?: string;
+  authority_name: string;
+  node_url: string;
+  validator_pubkey?: string;
+  status: NodeStatus;
+  is_primary: boolean;
+  block_height: number;
+  version?: string;
+  last_seen_at?: string;
+  registered_at: string;
+  approved_at?: string;
+  approved_by?: string;
+  rejection_reason?: string;
+}
+
+export interface NodeJoinRequest {
+  id: string;
+  node_url: string;
+  authority_name: string;
+  admin_email: string;
+  validator_pubkey: string;
+  status: "pending" | "approved" | "rejected";
+  created_at: string;
+  reviewed_at?: string;
+  reviewed_by?: string;
+  rejection_reason?: string;
+}
+
+export interface NetworkStats {
+  total: number;
+  active: number;
+  offline: number;
+  pending: number;
+}

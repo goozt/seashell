@@ -34,10 +34,15 @@ type BlockSummary struct {
 }
 
 // ChainService wraps blockchain operations with proper error handling (panics → errors).
+// The mu mutex serialises all blockchain access within this process; it must also be
+// held by callers that add externally-received blocks (e.g. P2P sync handler).
 type ChainService struct {
 	mu          sync.Mutex
 	chainDBPath string
 	db          *store.DB
+	// onBlock is an optional callback invoked (in a goroutine) after a block is
+	// successfully added locally.  Used by the node service to broadcast to peers.
+	onBlock func(blockHash []byte)
 }
 
 // NewChainService creates a ChainService.
@@ -45,15 +50,43 @@ func NewChainService(chainDBPath string, db *store.DB) *ChainService {
 	return &ChainService{chainDBPath: chainDBPath, db: db}
 }
 
-// openChain opens the existing blockchain. Caller must close it.
+// ChainDBPath returns the filesystem path of the blockchain database.
+func (cs *ChainService) ChainDBPath() string {
+	return cs.chainDBPath
+}
+
+// SetOnBlock registers a callback invoked (in a new goroutine) after a block is
+// locally added.  The callback receives the new block's hash.
+func (cs *ChainService) SetOnBlock(fn func(blockHash []byte)) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.onBlock = fn
+}
+
+// openChain opens the existing blockchain at the configured path. Caller must close it.
 func (cs *ChainService) openChain() (chain *blockchain.BlockChain, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("chain open error: %v", r)
 		}
 	}()
-	chain = blockchain.ContinueBlockChain(false, "")
+	chain = blockchain.ContinueBlockChainAt(cs.chainDBPath, false)
 	return chain, nil
+}
+
+// AddExternalBlock adds a peer-received block to the chain under the service mutex.
+// It validates PoA and chain linkage before storing.
+func (cs *ChainService) AddExternalBlock(block *blockchain.Block) error {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	chain, err := cs.openChain()
+	if err != nil {
+		return err
+	}
+	defer chain.Close()
+
+	return chain.AddExternalBlock(block)
 }
 
 // GetBalance returns the total UTXO balance for a blockchain address.
@@ -152,6 +185,14 @@ func (cs *ChainService) CreateAndSubmit(
 	}()
 	if addErr != nil {
 		return nil, addErr
+	}
+
+	newHash := make([]byte, len(chain.LastHash))
+	copy(newHash, chain.LastHash)
+
+	// Notify the node service to broadcast this block to peers (non-blocking).
+	if cb := cs.onBlock; cb != nil {
+		go cb(newHash)
 	}
 
 	return &TxResult{

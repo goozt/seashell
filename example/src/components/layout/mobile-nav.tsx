@@ -14,6 +14,7 @@ import {
   Users,
   FileQuestion,
   Star,
+  Network,
 } from "lucide-react";
 
 interface NavItem {
@@ -35,6 +36,7 @@ const adminItems: NavItem[] = [
   { label: "Requests", href: "/admin/requests", icon: FileQuestion },
   { label: "Tickets", href: "/admin/tickets", icon: TicketCheck },
   { label: "Users", href: "/admin/users", icon: Users },
+  { label: "Network", href: "/admin/network", icon: Network },
   { label: "Stats", href: "/admin", icon: ShieldCheck },
 ];
 
