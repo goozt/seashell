@@ -3,7 +3,10 @@ package service
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -158,6 +161,73 @@ func (s *AuthService) BootstrapSuperAdmin(password, email string) error {
 		UpdatedAt:    now,
 	}
 	return s.db.SaveUser(u)
+}
+
+// dbInitFile is the seed file loaded on first boot.
+type dbInitFile struct {
+	Admins []dbInitUser `json:"admins"`
+	Users  []dbInitUser `json:"users"`
+}
+
+type dbInitUser struct {
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
+}
+
+// SeedFromFile reads db_init.json next to the executable and creates any
+// admins/users that don't already exist. Safe to call on every startup —
+// existing accounts are skipped.
+func (s *AuthService) SeedFromFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // file absent — nothing to do
+		}
+		return fmt.Errorf("read db_init.json: %w", err)
+	}
+	var init dbInitFile
+	if err := json.Unmarshal(data, &init); err != nil {
+		return fmt.Errorf("parse db_init.json: %w", err)
+	}
+	seed := func(u dbInitUser, role string) {
+		if s.db.EmailExists(u.Email) || s.db.UsernameExists(u.Username) {
+			return
+		}
+		hash, err := HashPassword(u.Password)
+		if err != nil {
+			log.Printf("db_init: skip %s: %v", u.Email, err)
+			return
+		}
+		now := time.Now()
+		user := &model.User{
+			ID:           uuid.New().String(),
+			Username:     u.Username,
+			FirstName:    u.FirstName,
+			LastName:     u.LastName,
+			Email:        u.Email,
+			PasswordHash: hash,
+			Role:         role,
+			Active:       true,
+			KYCStatus:    model.KYCUnverified,
+			CreatedAt:    now,
+			UpdatedAt:    now,
+		}
+		if err := s.db.SaveUser(user); err != nil {
+			log.Printf("db_init: save %s: %v", u.Email, err)
+			return
+		}
+		log.Printf("db_init: created %s (%s)", u.Email, role)
+	}
+	for _, u := range init.Admins {
+		seed(u, model.RoleAdmin)
+	}
+	for _, u := range init.Users {
+		seed(u, model.RoleUser)
+	}
+	return nil
 }
 
 func randomHex(n int) (string, error) {

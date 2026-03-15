@@ -85,6 +85,41 @@ func (d *DB) ListNodeJoinRequests() ([]*model.NodeJoinRequest, error) {
 	return all, err
 }
 
+// ListNodesByTier returns all nodes with the given NodeTier value.
+// Nodes with empty NodeTier are treated as "branch".
+func (d *DB) ListNodesByTier(tier string) ([]*model.Node, error) {
+	all, err := d.ListNodes()
+	if err != nil {
+		return nil, err
+	}
+	var result []*model.Node
+	for _, n := range all {
+		nodeTier := n.NodeTier
+		if nodeTier == "" {
+			nodeTier = model.NodeTierBranch
+		}
+		if nodeTier == tier {
+			result = append(result, n)
+		}
+	}
+	return result, nil
+}
+
+// ListNodesByParent returns all nodes whose ParentNodeID matches the given ID.
+func (d *DB) ListNodesByParent(parentNodeID string) ([]*model.Node, error) {
+	all, err := d.ListNodes()
+	if err != nil {
+		return nil, err
+	}
+	var result []*model.Node
+	for _, n := range all {
+		if n.ParentNodeID == parentNodeID {
+			result = append(result, n)
+		}
+	}
+	return result, nil
+}
+
 // ListPendingNodeJoinRequests returns node join requests with status=pending.
 func (d *DB) ListPendingNodeJoinRequests() ([]*model.NodeJoinRequest, error) {
 	all, err := d.ListNodeJoinRequests()

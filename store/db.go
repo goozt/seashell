@@ -11,11 +11,13 @@ import (
 // DB wraps a BadgerDB instance for the API data layer.
 // It is stored at ./db/api (separate from the blockchain DB at ./db/blocks).
 type DB struct {
-	db *badger.DB
+	db  *badger.DB
+	kek []byte // AES-256-GCM key encryption key; nil means no encryption (dev mode)
 }
 
 // Open opens or creates the API BadgerDB at the given path.
-func Open(path string) (*DB, error) {
+// kek is the key encryption key for private keys at rest; pass nil for dev mode (no encryption).
+func Open(path string, kek []byte) (*DB, error) {
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
@@ -25,7 +27,62 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open badger: %w", err)
 	}
-	return &DB{db: bdb}, nil
+	return &DB{db: bdb, kek: kek}, nil
+}
+
+// MigratePrivKeysToEncrypted encrypts any unencrypted private keys already stored in the DB.
+// It is idempotent: guarded by a migration flag key so it only runs once per DB.
+// Safe to call on every startup.
+func (d *DB) MigratePrivKeysToEncrypted() error {
+	if len(d.kek) == 0 {
+		return nil // no-op in dev mode
+	}
+	const migrationFlag = "migration:privkey_encrypted"
+	var flag string
+	if err := d.get(migrationFlag, &flag); err == nil && flag == "1" {
+		return nil // already migrated
+	}
+
+	// Collect all wallet_privkey: and authority_privkey: entries.
+	type entry struct{ key string; val []byte }
+	var entries []entry
+	for _, prefix := range []string{"wallet_privkey:", "authority_privkey:"} {
+		err := d.db.View(func(txn *badger.Txn) error {
+			opts := badger.DefaultIteratorOptions
+			opts.Prefix = []byte(prefix)
+			it := txn.NewIterator(opts)
+			defer it.Close()
+			for it.Rewind(); it.Valid(); it.Next() {
+				item := it.Item()
+				k := string(item.KeyCopy(nil))
+				v, err := item.ValueCopy(nil)
+				if err != nil {
+					return err
+				}
+				entries = append(entries, entry{k, v})
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("scan %s: %w", prefix, err)
+		}
+	}
+
+	for _, e := range entries {
+		// Try decrypting with kek — if it succeeds the value is already encrypted.
+		if _, err := DecryptKey(d.kek, e.val); err == nil && len(e.val) > 12 {
+			continue // already encrypted (has nonce prefix)
+		}
+		encrypted, err := EncryptKey(d.kek, e.val)
+		if err != nil {
+			return fmt.Errorf("encrypt %s: %w", e.key, err)
+		}
+		if err := d.setRaw(e.key, encrypted); err != nil {
+			return fmt.Errorf("store %s: %w", e.key, err)
+		}
+	}
+
+	return d.set(migrationFlag, "1")
 }
 
 // Close closes the underlying BadgerDB.

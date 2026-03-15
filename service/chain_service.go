@@ -1,10 +1,12 @@
 package service
 
 import (
+	cryptorand "crypto/rand"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/big"
 	"sync"
 
@@ -25,12 +27,13 @@ type TxResult struct {
 
 // BlockSummary is a lightweight block representation for list endpoints.
 type BlockSummary struct {
-	Hash      string `json:"hash"`
-	Height    uint64 `json:"height"`
-	Timestamp uint   `json:"timestamp"`
-	Validator string `json:"validator"`
-	TxCount   int    `json:"tx_count"`
-	ValidPoA  bool   `json:"valid_poa"`
+	Hash           string `json:"hash"`
+	Height         uint64 `json:"height"`
+	Timestamp      uint   `json:"timestamp"`
+	LeadValidator  string `json:"lead_validator"`
+	SignatureCount int    `json:"signature_count"`
+	TxCount        int    `json:"tx_count"`
+	ValidPoA       bool   `json:"valid_poa"`
 }
 
 // ChainService wraps blockchain operations with proper error handling (panics → errors).
@@ -61,6 +64,29 @@ func (cs *ChainService) SetOnBlock(fn func(blockHash []byte)) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
 	cs.onBlock = fn
+}
+
+// EnsureInitialized creates a genesis block if the blockchain DB does not exist yet.
+// This should only be called on the primary node on first boot.
+func (cs *ChainService) EnsureInitialized() error {
+	if blockchain.DbExistsAt(cs.chainDBPath) {
+		return nil
+	}
+
+	// Generate a one-time genesis keypair. The address receives the coinbase reward.
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), cryptorand.Reader)
+	if err != nil {
+		return fmt.Errorf("generate genesis key: %w", err)
+	}
+	pubKey := append(privKey.PublicKey.X.Bytes(), privKey.PublicKey.Y.Bytes()...)
+	pubKeyHash := wallet.PublicKeyHash(pubKey)
+	versionedPayload := append([]byte{0x00}, pubKeyHash...)
+	genesisAddr := string(wallet.Base58Encode(append(versionedPayload, wallet.Checksum(versionedPayload)...)))
+
+	chain := blockchain.InitBlockChainAt(cs.chainDBPath, false, genesisAddr, pubKey, *privKey)
+	chain.Close()
+	log.Println("chain: genesis block created at", cs.chainDBPath)
+	return nil
 }
 
 // openChain opens the existing blockchain at the configured path. Caller must close it.
@@ -250,12 +276,13 @@ func (cs *ChainService) GetBlocks(limit int) ([]*BlockSummary, error) {
 	for {
 		block := iter.Next()
 		summaries = append(summaries, &BlockSummary{
-			Hash:      hex.EncodeToString(block.Hash),
-			Height:    block.Height,
-			Timestamp: block.Timestamp,
-			Validator: hex.EncodeToString(block.Validator),
-			TxCount:   len(block.Transactions),
-			ValidPoA:  blockchain.ValidateBlock(block, chain.Database),
+			Hash:           hex.EncodeToString(block.Hash),
+			Height:         block.Height,
+			Timestamp:      block.Timestamp,
+			LeadValidator:  hex.EncodeToString(block.LeadValidator()),
+			SignatureCount: len(block.Signatures),
+			TxCount:        len(block.Transactions),
+			ValidPoA:       blockchain.ValidateBlock(block, chain.Database),
 		})
 		count++
 		if len(block.PrevHash) == 0 || count >= limit {

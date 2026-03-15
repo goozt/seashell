@@ -8,6 +8,10 @@ const (
 	NodeStatusOffline   = "offline"
 	NodeStatusSuspended = "suspended"
 	NodeStatusRejected  = "rejected"
+
+	NodeTierPrimary  = "primary"
+	NodeTierRegional = "regional"
+	NodeTierBranch   = "branch"
 )
 
 // Node represents a SeaShell server participating in the blockchain network.
@@ -27,6 +31,12 @@ type Node struct {
 	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
 	ApprovedBy      string     `json:"approved_by,omitempty"`
 	RejectionReason string     `json:"rejection_reason,omitempty"`
+
+	// 3-tier topology fields. Existing records with empty NodeTier are treated as "branch".
+	NodeTier        string `json:"node_tier,omitempty"`        // primary|regional|branch
+	ParentNodeID    string `json:"parent_node_id,omitempty"`
+	ParentNodeURL   string `json:"parent_node_url,omitempty"`
+	CertFingerprint string `json:"cert_fingerprint,omitempty"` // SHA-256 hex of TLS cert
 }
 
 // NodeJoinRequest is a request from a new node to join the network.
@@ -42,6 +52,12 @@ type NodeJoinRequest struct {
 	ReviewedAt      *time.Time `json:"reviewed_at,omitempty"`
 	ReviewedBy      string     `json:"reviewed_by,omitempty"`
 	RejectionReason string     `json:"rejection_reason,omitempty"`
+	ApprovedByTier  string     `json:"approved_by_tier,omitempty"` // tier of approving admin
+
+	// 3-tier topology fields.
+	NodeTier      string `json:"node_tier,omitempty"`
+	ParentNodeID  string `json:"parent_node_id,omitempty"`
+	ParentNodeURL string `json:"parent_node_url,omitempty"`
 }
 
 // NodeRegisterRequest is the payload POSTed by a new node to /api/v1/nodes/register.
@@ -50,6 +66,9 @@ type NodeRegisterRequest struct {
 	AuthorityName   string `json:"authority_name"`
 	AdminEmail      string `json:"admin_email"`
 	ValidatorPubKey string `json:"validator_pubkey"`
+	NodeTier        string `json:"node_tier,omitempty"`
+	ParentNodeID    string `json:"parent_node_id,omitempty"`
+	ParentNodeURL   string `json:"parent_node_url,omitempty"`
 }
 
 // NodeApproveResponse is returned to the new node after its request is approved.
@@ -61,6 +80,19 @@ type NodeApproveResponse struct {
 // NodeRejectRequest is the payload for rejecting a node join request.
 type NodeRejectRequest struct {
 	Reason string `json:"reason"`
+}
+
+// CoSignRequest is the P2P payload for POST /p2p/v1/cosign.
+type CoSignRequest struct {
+	BlockHash     string `json:"block_hash"`     // hex-encoded SHA-256
+	Height        uint64 `json:"height"`
+	LeadValidator string `json:"lead_validator"` // hex-encoded 64-byte pubkey
+}
+
+// CoSignResponse is returned by a co-signer node.
+type CoSignResponse struct {
+	PubKey string `json:"pub_key"` // hex-encoded 64-byte pubkey
+	Sig    string `json:"sig"`     // hex-encoded 64-byte r||s signature
 }
 
 // PingRequest is the P2P ping payload.

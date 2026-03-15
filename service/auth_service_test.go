@@ -17,7 +17,7 @@ func tempDB(t *testing.T) *store.DB {
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
 	}
-	db, err := store.Open(dir)
+	db, err := store.Open(dir, nil)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -117,6 +117,67 @@ func TestRefreshTokenFlow(t *testing.T) {
 	// Validate after revoke should fail.
 	if _, err := svc.ValidateRefreshToken(pair.RefreshToken); err == nil {
 		t.Error("expected error after revoke, got nil")
+	}
+}
+
+func TestSeedFromFile(t *testing.T) {
+	db := tempDB(t)
+	svc := service.NewAuthService(db, "secret", 15, 7)
+
+	// Write a temporary db_init.json.
+	dir := t.TempDir()
+	seedPath := dir + "/db_init.json"
+	content := `{
+		"admins": [{"username":"Kerala Admin","email":"kerala@nikz.in","password":"secretpassword"}],
+		"users":  [{"username":"Alice","email":"alice@nikz.in","password":"secretpassword"},
+		           {"username":"Nikz","email":"me@nikz.in","password":"secretpassword"}]
+	}`
+	if err := os.WriteFile(seedPath, []byte(content), 0600); err != nil {
+		t.Fatalf("write seed file: %v", err)
+	}
+
+	if err := svc.SeedFromFile(seedPath); err != nil {
+		t.Fatalf("SeedFromFile: %v", err)
+	}
+
+	tests := []struct {
+		email    string
+		password string
+		role     string
+	}{
+		{"kerala@nikz.in", "secretpassword", "admin"},
+		{"alice@nikz.in", "secretpassword", "user"},
+		{"me@nikz.in", "secretpassword", "user"},
+	}
+	for _, tt := range tests {
+		u, err := db.GetUserByEmail(tt.email)
+		if err != nil {
+			t.Errorf("user %s not found: %v", tt.email, err)
+			continue
+		}
+		if u.Role != tt.role {
+			t.Errorf("%s: role = %s, want %s", tt.email, u.Role, tt.role)
+		}
+		if !u.Active {
+			t.Errorf("%s: expected active=true", tt.email)
+		}
+		if err := service.CheckPassword(u.PasswordHash, tt.password); err != nil {
+			t.Errorf("%s: password check failed: %v", tt.email, err)
+		}
+	}
+
+	// Idempotent — calling again should not create duplicates.
+	if err := svc.SeedFromFile(seedPath); err != nil {
+		t.Fatalf("second SeedFromFile: %v", err)
+	}
+	_, total, _ := db.ListUsers(1, 100)
+	if total != 3 {
+		t.Errorf("expected 3 users after second seed, got %d", total)
+	}
+
+	// Missing file should be a no-op.
+	if err := svc.SeedFromFile(dir + "/nonexistent.json"); err != nil {
+		t.Errorf("missing file should not error: %v", err)
 	}
 }
 

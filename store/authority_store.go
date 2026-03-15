@@ -67,12 +67,20 @@ func (d *DB) ListActiveAuthorities() ([]*model.Authority, error) {
 }
 
 // StoreAuthorityPrivKey stores the raw D bytes of an authority validator private key.
-// This key is NEVER returned in API responses.
+// This key is NEVER returned in API responses. Encrypted at rest when a KEK is configured.
 func (d *DB) StoreAuthorityPrivKey(authorityID string, dBytes []byte) error {
-	return d.setRaw(fmt.Sprintf("authority_privkey:%s", authorityID), dBytes)
+	encrypted, err := EncryptKey(d.kek, dBytes)
+	if err != nil {
+		return fmt.Errorf("encrypt authority privkey: %w", err)
+	}
+	return d.setRaw(fmt.Sprintf("authority_privkey:%s", authorityID), encrypted)
 }
 
 // GetAuthorityPrivKey retrieves the raw D bytes of an authority validator private key.
 func (d *DB) GetAuthorityPrivKey(authorityID string) ([]byte, error) {
-	return d.getRaw(fmt.Sprintf("authority_privkey:%s", authorityID))
+	data, err := d.getRaw(fmt.Sprintf("authority_privkey:%s", authorityID))
+	if err != nil {
+		return nil, err
+	}
+	return DecryptKey(d.kek, data)
 }

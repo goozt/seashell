@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/goozt/seashell/model"
 )
@@ -41,8 +42,6 @@ func (d *DB) ListValueHistory(authorityID string) ([]*model.ValueRecord, error) 
 		return nil, err
 	}
 	// Reverse for most-recent-first
-	for i, j := 0, len(records)-1; i < j; i, j = i+1, j-1 {
-		records[i], records[j] = records[j], records[i]
-	}
+	slices.Reverse(records)
 	return records, nil
 }

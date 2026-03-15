@@ -146,11 +146,20 @@ func (d *DB) SuperAdminExists() bool {
 }
 
 // StoreWalletPrivKey stores the raw D bytes of a user's ECDSA private key.
+// The value is encrypted at rest when a KEK is configured.
 func (d *DB) StoreWalletPrivKey(userID string, dBytes []byte) error {
-	return d.setRaw(fmt.Sprintf("wallet_privkey:%s", userID), dBytes)
+	encrypted, err := EncryptKey(d.kek, dBytes)
+	if err != nil {
+		return fmt.Errorf("encrypt wallet privkey: %w", err)
+	}
+	return d.setRaw(fmt.Sprintf("wallet_privkey:%s", userID), encrypted)
 }
 
 // GetWalletPrivKey retrieves the raw D bytes of a user's ECDSA private key.
 func (d *DB) GetWalletPrivKey(userID string) ([]byte, error) {
-	return d.getRaw(fmt.Sprintf("wallet_privkey:%s", userID))
+	data, err := d.getRaw(fmt.Sprintf("wallet_privkey:%s", userID))
+	if err != nil {
+		return nil, err
+	}
+	return DecryptKey(d.kek, data)
 }

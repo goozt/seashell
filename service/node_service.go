@@ -29,18 +29,21 @@ func NewNodeService(db *store.DB, chainSvc *ChainService, cfg *config.Config) *N
 	return &NodeService{db: db, chainSvc: chainSvc, cfg: cfg}
 }
 
-// Bootstrap performs node-startup initialisation:
-//   - If primary: ensures a self-registration record exists.
-//   - If secondary: sends a join request to the primary and waits for approval,
-//     then syncs the blockchain.
+// Bootstrap performs node-startup initialisation based on the node's tier.
+//   - primary:  ensures a self-registration record exists.
+//   - regional: registers with the primary node, syncs chain.
+//   - branch:   registers with regional (or primary) node, syncs chain.
 //
-// Bootstrap is called once during server startup and blocks until the node is
-// ready (or an error occurs).
+// Bootstrap is called once during server startup.
 func (s *NodeService) Bootstrap() error {
-	if s.cfg.IsPrimary {
+	switch s.cfg.NodeTier {
+	case model.NodeTierPrimary:
 		return s.bootstrapPrimary()
+	case model.NodeTierRegional:
+		return s.bootstrapRegional()
+	default: // branch or unset
+		return s.bootstrapBranch()
 	}
-	return s.bootstrapSecondary()
 }
 
 func (s *NodeService) bootstrapPrimary() error {
@@ -79,6 +82,45 @@ func (s *NodeService) bootstrapPrimary() error {
 	return nil
 }
 
+// bootstrapRegional registers this node as a regional node with the primary.
+func (s *NodeService) bootstrapRegional() error {
+	return s.bootstrapSecondaryWithParent(s.cfg.PrimaryNodeURL, model.NodeTierRegional)
+}
+
+// bootstrapBranch registers this node as a branch node with the regional (or primary) node.
+func (s *NodeService) bootstrapBranch() error {
+	parentURL := s.cfg.RegionalNodeURL
+	if parentURL == "" {
+		parentURL = s.cfg.PrimaryNodeURL
+	}
+	return s.bootstrapSecondaryWithParent(parentURL, model.NodeTierBranch)
+}
+
+// bootstrapSecondaryWithParent is the shared bootstrap logic for regional and branch nodes.
+func (s *NodeService) bootstrapSecondaryWithParent(parentURL, tier string) error {
+	// Check if we already have an approved node record locally.
+	nodes, err := s.db.ListNodes()
+	if err != nil {
+		return fmt.Errorf("list nodes: %w", err)
+	}
+	for _, n := range nodes {
+		if n.NodeURL == s.cfg.NodeURL && n.Status == model.NodeStatusActive {
+			s.selfID = n.ID
+			// Sync chain from parent if URL is known.
+			if parentURL != "" {
+				if err := s.SyncFromPeer(parentURL); err != nil {
+					log.Printf("node: sync from parent %s: %v", parentURL, err)
+				}
+			}
+			s.startHealthChecker()
+			return nil
+		}
+	}
+	// Not yet registered — log and proceed without broadcasting until approved.
+	log.Printf("node: %s node not yet approved (tier=%s). Waiting for approval via API.", tier, tier)
+	return nil
+}
+
 func (s *NodeService) bootstrapSecondary() error {
 	// Check if we already have an approved node record locally.
 	nodes, err := s.db.ListNodes()
@@ -105,7 +147,10 @@ func (s *NodeService) SelfID() string {
 }
 
 // OnBlockMined is called (in a goroutine) when a new block is mined locally.
-// It fetches the block and broadcasts it to all active peers.
+// Broadcast routing is tier-aware:
+//   - branch:   broadcast only to parent regional (or primary if no regional).
+//   - regional: fan-out to primary + all other regionals.
+//   - primary:  broadcast to all active nodes.
 func (s *NodeService) OnBlockMined(blockHash []byte) {
 	if s.cfg.NodeURL == "" {
 		return
@@ -116,24 +161,73 @@ func (s *NodeService) OnBlockMined(blockHash []byte) {
 		return
 	}
 
-	peers, err := s.db.ListActiveNodes()
+	targets, err := s.broadcastTargets()
 	if err != nil {
-		log.Printf("node: broadcast: list peers: %v", err)
+		log.Printf("node: broadcast: resolve targets: %v", err)
 		return
 	}
+	if len(targets) == 0 {
+		return
+	}
+	log.Printf("node: broadcasting block %x to %d peer(s)", blockHash[:4], len(targets))
+	node.BroadcastBlock(targets, block, s.cfg.NodeSecret)
+}
 
-	var filtered []model.Node
-	for _, p := range peers {
-		if p.NodeURL != s.cfg.NodeURL {
-			filtered = append(filtered, *p)
+// broadcastTargets returns the peer nodes to broadcast to based on this node's tier.
+func (s *NodeService) broadcastTargets() ([]model.Node, error) {
+	tier := s.cfg.NodeTier
+
+	switch tier {
+	case model.NodeTierBranch, "":
+		// Branch sends only to its parent regional (or primary as fallback).
+		parentURL := s.cfg.RegionalNodeURL
+		if parentURL == "" {
+			parentURL = s.cfg.PrimaryNodeURL
 		}
-	}
+		if parentURL == "" {
+			return nil, nil
+		}
+		allNodes, err := s.db.ListActiveNodes()
+		if err != nil {
+			return nil, err
+		}
+		for _, n := range allNodes {
+			if n.NodeURL == parentURL {
+				return []model.Node{*n}, nil
+			}
+		}
+		return nil, nil
 
-	if len(filtered) == 0 {
-		return
+	case model.NodeTierRegional:
+		// Regional fans out to primary + other regionals.
+		allNodes, err := s.db.ListActiveNodes()
+		if err != nil {
+			return nil, err
+		}
+		var targets []model.Node
+		for _, n := range allNodes {
+			if n.NodeURL == s.cfg.NodeURL {
+				continue
+			}
+			if n.IsPrimary || n.NodeTier == model.NodeTierRegional {
+				targets = append(targets, *n)
+			}
+		}
+		return targets, nil
+
+	default: // primary — broadcast to everyone
+		allNodes, err := s.db.ListActiveNodes()
+		if err != nil {
+			return nil, err
+		}
+		var targets []model.Node
+		for _, n := range allNodes {
+			if n.NodeURL != s.cfg.NodeURL {
+				targets = append(targets, *n)
+			}
+		}
+		return targets, nil
 	}
-	log.Printf("node: broadcasting block %x to %d peers", blockHash[:4], len(filtered))
-	node.BroadcastBlock(filtered, block, s.cfg.NodeSecret)
 }
 
 // GetNetworkNodes returns the full node list.

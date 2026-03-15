@@ -16,7 +16,7 @@ func openTestDB(t *testing.T) *store.DB {
 	if err != nil {
 		t.Fatalf("mkdirtemp: %v", err)
 	}
-	db, err := store.Open(dir)
+	db, err := store.Open(dir, nil)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestUserCRUD(t *testing.T) {
 func TestUserList(t *testing.T) {
 	db := openTestDB(t)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_ = db.SaveUser(newUser(model.RoleUser))
 	}
 
