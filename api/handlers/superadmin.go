@@ -66,6 +66,8 @@ func (h *SuperAdminHandler) CreateAdmin(w http.ResponseWriter, r *http.Request) 
 	admin := &model.User{
 		ID:           uuid.New().String(),
 		Username:     req.Username,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
 		Email:        req.Email,
 		PasswordHash: hash,
 		Role:         model.RoleAdmin,

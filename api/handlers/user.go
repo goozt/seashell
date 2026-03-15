@@ -19,11 +19,13 @@ type UserHandler struct {
 	db       *store.DB
 	chainSvc *service.ChainService
 	authSvc  *service.AuthService
+	hub      *service.WSHub
+	pushSvc  *service.PushService
 }
 
 // NewUserHandler creates a UserHandler.
-func NewUserHandler(db *store.DB, chainSvc *service.ChainService, authSvc *service.AuthService) *UserHandler {
-	return &UserHandler{db: db, chainSvc: chainSvc, authSvc: authSvc}
+func NewUserHandler(db *store.DB, chainSvc *service.ChainService, authSvc *service.AuthService, hub *service.WSHub, pushSvc *service.PushService) *UserHandler {
+	return &UserHandler{db: db, chainSvc: chainSvc, authSvc: authSvc, hub: hub, pushSvc: pushSvc}
 }
 
 func (h *UserHandler) currentUser(r *http.Request) (*model.User, bool) {
@@ -66,6 +68,12 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		u.Username = req.Username
+	}
+	if req.FirstName != "" {
+		u.FirstName = req.FirstName
+	}
+	if req.LastName != "" {
+		u.LastName = req.LastName
 	}
 	if req.Email != "" && req.Email != u.Email {
 		if h.db.EmailExists(req.Email) {
@@ -331,10 +339,6 @@ func (h *UserHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 		response.Unauthorized(w)
 		return
 	}
-	if !u.IsAffiliated() {
-		response.Forbidden(w)
-		return
-	}
 	var req model.CreateTicketRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.BadRequest(w, "invalid JSON")
@@ -352,6 +356,7 @@ func (h *UserHandler) CreateTicket(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      model.TicketStatusOpen,
+		EscalatedTo: model.TicketLevelNode,
 		Replies:     []model.TicketReply{},
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -406,11 +411,12 @@ func (h *UserHandler) ReplyToTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply := model.TicketReply{
-		ID:         uuid.New().String(),
-		AuthorID:   u.ID,
-		AuthorRole: u.Role,
-		Message:    req.Message,
-		CreatedAt:  time.Now(),
+		ID:             uuid.New().String(),
+		AuthorID:       u.ID,
+		AuthorUsername: u.Username,
+		AuthorRole:     u.Role,
+		Message:        req.Message,
+		CreatedAt:      time.Now(),
 	}
 	ticket.Replies = append(ticket.Replies, reply)
 	ticket.UpdatedAt = time.Now()
@@ -418,5 +424,30 @@ func (h *UserHandler) ReplyToTicket(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w, "could not save reply")
 		return
 	}
+
+	// Notify all admins of this authority about the new user reply.
+	if users, _, err := h.db.ListUsers(1, 1000); err == nil {
+		for _, admin := range users {
+			if (admin.Role == model.RoleAdmin || admin.Role == model.RoleSuperAdmin) && admin.AuthorityID == ticket.AuthorityID {
+				h.hub.SendTo(admin.ID, model.WSTypeSupport, generateID(), model.SupportPayload{
+					TicketID: ticket.ID,
+					Reply:    reply,
+				})
+				h.hub.SendTo(admin.ID, model.WSTypeNotification, generateID(), model.NotificationPayload{
+					Title: "User replied: " + ticket.Title,
+					Body:  reply.Message,
+					Link:  "/admin/tickets",
+				})
+				h.pushSvc.SendToUser(admin.ID, model.PushPayload{
+					Title: "User replied: " + ticket.Title,
+					Body:  reply.Message,
+					Icon:  "/logo-icon.png",
+					URL:   "/admin/tickets",
+					Tag:   "ticket-" + ticket.ID,
+				})
+			}
+		}
+	}
+
 	response.Created(w, ticket)
 }

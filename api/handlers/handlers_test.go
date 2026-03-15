@@ -24,7 +24,7 @@ func setupTestDB(t *testing.T) (*store.DB, func()) {
 	if err != nil {
 		t.Fatalf("mkdirtemp: %v", err)
 	}
-	db, err := store.Open(dir)
+	db, err := store.Open(dir, nil)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}

@@ -20,16 +20,17 @@ import (
 
 // NodeHandler serves both P2P (/p2p/v1/*) and REST node routes.
 type NodeHandler struct {
-	db       *store.DB
-	chainSvc *service.ChainService
-	nodeSvc  *service.NodeService
+	db        *store.DB
+	chainSvc  *service.ChainService
+	nodeSvc   *service.NodeService
+	quorumSvc *service.QuorumService
 	isPrimary bool
-	nodeURL  string
+	nodeURL   string
 }
 
 // NewNodeHandler creates a NodeHandler.
-func NewNodeHandler(db *store.DB, chainSvc *service.ChainService, nodeSvc *service.NodeService, isPrimary bool, nodeURL string) *NodeHandler {
-	return &NodeHandler{db: db, chainSvc: chainSvc, nodeSvc: nodeSvc, isPrimary: isPrimary, nodeURL: nodeURL}
+func NewNodeHandler(db *store.DB, chainSvc *service.ChainService, nodeSvc *service.NodeService, quorumSvc *service.QuorumService, isPrimary bool, nodeURL string) *NodeHandler {
+	return &NodeHandler{db: db, chainSvc: chainSvc, nodeSvc: nodeSvc, quorumSvc: quorumSvc, isPrimary: isPrimary, nodeURL: nodeURL}
 }
 
 // -------------------------------------------------------------------
@@ -427,4 +428,53 @@ func (h *NodeHandler) ReinstateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.OK(w, n)
+}
+
+// GetNodesByTier handles GET /api/v1/admin/nodes/tier/{tier}
+func (h *NodeHandler) GetNodesByTier(w http.ResponseWriter, r *http.Request) {
+	tier := chi.URLParam(r, "tier")
+	nodes, err := h.db.ListNodesByTier(tier)
+	if err != nil {
+		response.InternalError(w, "could not load nodes")
+		return
+	}
+	response.OK(w, map[string]interface{}{"nodes": nodes, "tier": tier})
+}
+
+// P2PCoSign handles POST /p2p/v1/cosign
+// A peer requests this node to co-sign a block hash with its authority key.
+func (h *NodeHandler) P2PCoSign(w http.ResponseWriter, r *http.Request) {
+	var req model.CoSignRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "invalid JSON")
+		return
+	}
+	if req.BlockHash == "" {
+		response.BadRequest(w, "block_hash is required")
+		return
+	}
+
+	hashBytes, err := hex.DecodeString(req.BlockHash)
+	if err != nil {
+		response.BadRequest(w, "invalid block_hash hex")
+		return
+	}
+
+	// Resolve the local authority: look up this node's own record in the DB.
+	selfNode, err := h.db.GetNodeByID(h.nodeSvc.SelfID())
+	if err != nil || selfNode.AuthorityID == "" {
+		response.InternalError(w, "local authority not configured")
+		return
+	}
+
+	sig, err := h.quorumSvc.SignBlock(hashBytes, selfNode.AuthorityID)
+	if err != nil {
+		response.InternalError(w, "sign error: "+err.Error())
+		return
+	}
+
+	response.OK(w, model.CoSignResponse{
+		PubKey: hex.EncodeToString(sig.PubKey),
+		Sig:    hex.EncodeToString(sig.Sig),
+	})
 }

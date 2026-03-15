@@ -27,6 +27,44 @@ type Config struct {
 	// NodeSecret is a shared secret used to authenticate P2P requests between nodes.
 	// All nodes in the network must share the same value.
 	NodeSecret string
+
+	// KeyEncryptionKey is a 32-byte hex-encoded AES-256-GCM key used to encrypt
+	// private keys at rest. Required in production; optional in development.
+	KeyEncryptionKey string // ENV: KEY_ENCRYPTION_KEY
+
+	// TLSEnabled enables mutual TLS for P2P communication.
+	TLSEnabled bool // ENV: TLS_ENABLED, default false
+
+	// CertPath is the path to this node's TLS certificate file.
+	CertPath string // ENV: CERT_PATH, default ./certs/node.crt
+
+	// CACertPath is the path to the CA certificate chain file.
+	CACertPath string // ENV: CA_CERT_PATH, default ./certs/ca.crt
+
+	// NodeTier identifies this node's role in the 3-tier hierarchy.
+	// Values: "primary" | "regional" | "branch". Default: "branch".
+	NodeTier string // ENV: NODE_TIER
+
+	// RegionalNodeURL is the URL of the regional node that supervises this branch node.
+	// Empty for primary and regional nodes.
+	RegionalNodeURL string // ENV: REGIONAL_NODE_URL
+
+	// ArchivePath is the directory where archived blockchain blocks are stored.
+	// Default: $DB_PATH/archive
+	ArchivePath string // ENV: ARCHIVE_PATH
+
+	// ArchiveRetentionYears is the number of years to keep blocks in the live chain.
+	// Blocks older than this are moved to the archive. Default: 6.
+	ArchiveRetentionYears int // ENV: ARCHIVE_RETENTION_YEARS
+
+	// IdPBaseURL is the base URL of the Identity Provider service for National ID verification.
+	// Default: http://localhost:9999
+	IdPBaseURL string // ENV: IDP_BASE_URL
+
+	// VAPID keys for Web Push notifications.
+	VAPIDPublicKey  string // ENV: VAPID_PUBLIC_KEY
+	VAPIDPrivateKey string // ENV: VAPID_PRIVATE_KEY
+	VAPIDEmail      string // ENV: VAPID_EMAIL, default "mailto:admin@seashell.local"
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -49,6 +87,11 @@ func Load() *Config {
 		fmt.Fprintln(os.Stderr, "WARNING: NODE_SECRET not set, using insecure default")
 	}
 
+	isPrimaryNode := getEnvBool("IS_PRIMARY", false)
+	if isPrimaryNode {
+		fmt.Println("Running on PRIMARY Node")
+	}
+
 	return &Config{
 		Port:               getEnv("PORT", "8080"),
 		JWTSecret:          secret,
@@ -62,6 +105,19 @@ func Load() *Config {
 		PrimaryNodeURL: getEnv("PRIMARY_NODE_URL", ""),
 		IsPrimary:      getEnvBool("IS_PRIMARY", false),
 		NodeSecret:     nodeSecret,
+
+		KeyEncryptionKey:      getEnv("DB_ENCRYPTION_KEY", ""),
+		TLSEnabled:            getEnvBool("TLS_ENABLED", false),
+		CertPath:              getEnv("CERT_PATH", "./certs/node.crt"),
+		CACertPath:            getEnv("CA_CERT_PATH", "./certs/ca.crt"),
+		NodeTier:              getEnv("NODE_TIER", "branch"),
+		RegionalNodeURL:       getEnv("REGIONAL_NODE_URL", ""),
+		ArchivePath:           getEnv("ARCHIVE_PATH", ""),
+		ArchiveRetentionYears: getEnvInt("ARCHIVE_RETENTION_YEARS", 6),
+		IdPBaseURL:            getEnv("IDP_BASE_URL", "http://localhost:9999"),
+		VAPIDPublicKey:        getEnv("VAPID_PUBLIC_KEY", ""),
+		VAPIDPrivateKey:       getEnv("VAPID_PRIVATE_KEY", ""),
+		VAPIDEmail:            getEnv("VAPID_EMAIL", "mailto:admin@seashell.local"),
 	}
 }
 

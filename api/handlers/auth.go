@@ -55,6 +55,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	u := &model.User{
 		ID:           uuid.New().String(),
 		Username:     req.Username,
+		FirstName:    req.FirstName,
+		LastName:     req.LastName,
 		Email:        req.Email,
 		PasswordHash: hash,
 		Role:         model.RoleUser,
