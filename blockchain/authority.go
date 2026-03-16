@@ -93,6 +93,10 @@ func countValidSigs(block *Block, validators [][]byte) int {
 
 // ValidateBlock verifies the block has a quorum of valid signatures from registered validators.
 func ValidateBlock(block *Block, db *badger.DB) bool {
+	// Genesis block predates the validator set and is always considered valid.
+	if block.Height == 0 {
+		return true
+	}
 	validators := GetValidators(db)
 	if len(validators) == 0 {
 		return false
