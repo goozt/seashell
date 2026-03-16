@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
   title: "SeaShell",
@@ -37,7 +38,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#a78bfa",
+  themeColor: "#0ddff2",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -53,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="msapplication-wide310x150logo"   content="/windows/Wide310x150Logo.scale-100.png" />
         <meta name="msapplication-square310x310logo" content="/windows/LargeTile.scale-100.png" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} font-display`}>
         <Providers>{children}</Providers>
       </body>
     </html>

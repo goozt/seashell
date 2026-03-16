@@ -126,7 +126,7 @@ func Start(cfg *config.Config) error {
 	publicH := handlers.NewPublicHandler(chainSvc, valueSvc, db)
 	userH := handlers.NewUserHandler(db, chainSvc, authSvc, hub, pushSvc, verifySvc)
 	authorityOwnerH := handlers.NewAuthorityOwnerHandler(db, chainSvc, valueSvc)
-	adminH := handlers.NewAdminHandler(db, cfg.DBPath+"/blocks", hub, pushSvc)
+	adminH := handlers.NewAdminHandler(db, cfg.DBPath+"/blocks", chainSvc, hub, pushSvc)
 	superAdminH := handlers.NewSuperAdminHandler(db, authSvc)
 	pushH := handlers.NewPushHandler(db, pushSvc, cfg)
 	wsH := handlers.NewWSHandler(hub, authSvc)
@@ -148,6 +148,7 @@ func Start(cfg *config.Config) error {
 	r.Get("/api/v1/health", publicH.Health)
 	r.Get("/api/v1/blocks", publicH.GetBlocks)
 	r.Get("/api/v1/blocks/{hash}", publicH.GetBlock)
+	r.Get("/api/v1/chain/events", publicH.GetChainEvents)
 	r.Get("/api/v1/value", publicH.GetValue)
 
 	// WebSocket (auth handled inside handler via query param token).

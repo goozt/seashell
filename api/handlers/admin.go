@@ -23,13 +23,14 @@ import (
 type AdminHandler struct {
 	db          *store.DB
 	chainDBPath string
+	chainSvc    *service.ChainService
 	hub         *service.WSHub
 	pushSvc     *service.PushService
 }
 
 // NewAdminHandler creates an AdminHandler.
-func NewAdminHandler(db *store.DB, chainDBPath string, hub *service.WSHub, pushSvc *service.PushService) *AdminHandler {
-	return &AdminHandler{db: db, chainDBPath: chainDBPath, hub: hub, pushSvc: pushSvc}
+func NewAdminHandler(db *store.DB, chainDBPath string, chainSvc *service.ChainService, hub *service.WSHub, pushSvc *service.PushService) *AdminHandler {
+	return &AdminHandler{db: db, chainDBPath: chainDBPath, chainSvc: chainSvc, hub: hub, pushSvc: pushSvc}
 }
 
 // GetAuthorityRequests handles GET /api/v1/admin/authority-requests.
@@ -123,6 +124,15 @@ func (h *AdminHandler) ApproveAuthorityRequest(w http.ResponseWriter, r *http.Re
 		// authority claims take effect immediately without requiring re-login.
 		h.hub.SendTo(owner.ID, model.WSTypeTokenRefresh, generateID(), nil)
 	}
+
+	// Record an immutable on-chain event for the authority registration.
+	// Non-fatal: log and continue if event recording fails.
+	go func() {
+		if err := h.chainSvc.RecordAuthorityRegistered(authority.ID, authority.Name, authority.ValidatorPubKey); err != nil {
+			// Already logged inside RecordAuthorityRegistered.
+			_ = err
+		}
+	}()
 
 	response.OK(w, authority)
 }

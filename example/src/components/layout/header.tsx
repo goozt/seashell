@@ -5,7 +5,7 @@ import { authApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, User } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { LogoLink } from "@/components/layout/seashell-logo";
 import { NotificationCenter } from "@/components/layout/notification-center";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
@@ -25,18 +25,24 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur">
-      <div className="flex h-14 items-center justify-between px-4">
+    <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-primary/10">
+      <div className="flex h-14 items-center justify-between px-4 max-w-2xl mx-auto">
         <LogoLink href="/" iconSize={28} />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           {hasHydrated && user && (
             <>
-              <div className="hidden sm:flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">{(user.first_name || user.last_name) ? `${user.first_name} ${user.last_name}`.trim() : user.username}</span>
+              <div className="hidden sm:flex items-center gap-2 mr-1">
+                <span className="text-sm font-medium text-foreground/80">
+                  {(user.first_name || user.last_name)
+                    ? `${user.first_name} ${user.last_name}`.trim()
+                    : user.username}
+                </span>
                 {user.role !== "user" && (
-                  <Badge variant="secondary" className="text-xs capitalize">
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] capitalize border-primary/30 text-primary"
+                  >
                     {user.role}
                   </Badge>
                 )}
@@ -47,7 +53,7 @@ export function Header() {
                 variant="ghost"
                 size="icon"
                 onClick={handleLogout}
-                className="h-8 w-8"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 title="Sign out"
               >
                 <LogOut className="h-4 w-4" />

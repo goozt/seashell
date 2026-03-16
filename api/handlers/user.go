@@ -159,6 +159,21 @@ func (h *UserHandler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w, "could not save wallet address")
 		return
 	}
+
+	// Issue an authority-signed identity proof and record a UserVerified on-chain event.
+	if u.IsAffiliated() {
+		proof, proofErr := h.verifySvc.IssueIdentityProof(u.ID, u.AuthorityID, addr)
+		if proofErr == nil && proof != nil {
+			if authority, err := h.db.GetAuthorityByID(u.AuthorityID); err == nil {
+				authorityName := authority.Name
+				userIDHash := proof.UserIDHash
+				go func() {
+					_ = h.chainSvc.RecordUserVerified(u.AuthorityID, authorityName, userIDHash, addr)
+				}()
+			}
+		}
+	}
+
 	response.Created(w, map[string]string{"address": addr})
 }
 
@@ -221,7 +236,9 @@ func (h *UserHandler) CreateTransaction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, err := h.chainSvc.CreateAndSubmit(u.WalletAddress, req.ToAddress, req.Amount, privKey, pubKey)
+	proof, _ := h.db.GetIdentityProof(u.ID) // nil if not yet issued; still valid, proof is optional
+
+	result, err := h.chainSvc.CreateAndSubmit(u.WalletAddress, req.ToAddress, req.Amount, privKey, pubKey, proof)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return

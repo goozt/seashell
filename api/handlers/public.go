@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/goozt/seashell/api/response"
+	"github.com/goozt/seashell/blockchain"
 	"github.com/goozt/seashell/service"
 	"github.com/goozt/seashell/store"
 )
@@ -50,12 +51,31 @@ func (h *PublicHandler) GetBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.OK(w, map[string]interface{}{
-		"hash":      hashHex,
-		"height":    block.Height,
-		"timestamp": block.Timestamp,
-		"valid_poa": valid,
-		"tx_count":  len(block.Transactions),
+		"hash":       hashHex,
+		"height":     block.Height,
+		"timestamp":  block.Timestamp,
+		"valid_poa":  valid,
+		"tx_count":   len(block.Transactions),
+		"events":     block.Events,
+		"event_count": len(block.Events),
 	})
+}
+
+// GetChainEvents handles GET /api/v1/chain/events.
+// Optional query params: type (filter by event type), limit (default 50).
+func (h *PublicHandler) GetChainEvents(w http.ResponseWriter, r *http.Request) {
+	eventType := r.URL.Query().Get("type")
+	limit := 50
+	events, err := h.chainSvc.GetEventsFromChain(eventType, limit)
+	if err != nil {
+		response.InternalError(w, "could not load events")
+		return
+	}
+	if events == nil {
+		response.OK(w, []blockchain.ChainEvent{})
+		return
+	}
+	response.OK(w, events)
 }
 
 // GetValue handles GET /api/v1/value — returns current price for all active authorities.

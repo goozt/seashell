@@ -4,48 +4,50 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Light — complementary teal-white palette */
+    --background: 180 30% 97%;       /* #f3f9f9 */
+    --foreground: 182 50% 8%;        /* near-black teal */
+    --card: 180 28% 93%;             /* #e8f4f4 */
+    --card-foreground: 182 50% 8%;
+    --popover: 180 28% 93%;
+    --popover-foreground: 182 50% 8%;
+    --primary: 184 72% 43%;          /* #0bbdcc — darkened for light contrast */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 180 20% 88%;
+    --secondary-foreground: 182 50% 8%;
+    --muted: 180 20% 88%;
+    --muted-foreground: 182 20% 40%;
+    --accent: 184 30% 88%;
+    --accent-foreground: 182 50% 8%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --destructive-foreground: 0 0% 100%;
+    --border: 184 30% 82%;
+    --input: 184 30% 82%;
+    --ring: 184 72% 43%;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Dark — reference palette */
+    --background: 182 88% 4%;        /* #081212 */
+    --foreground: 180 10% 95%;       /* near-white */
+    --card: 183 36% 10%;             /* #102122 */
+    --card-foreground: 180 10% 95%;
+    --popover: 183 36% 10%;
+    --popover-foreground: 180 10% 95%;
+    --primary: 184 93% 50%;          /* #0ddff2 */
+    --primary-foreground: 182 88% 4%;
+    --secondary: 183 30% 16%;
+    --secondary-foreground: 180 10% 95%;
+    --muted: 183 30% 16%;
+    --muted-foreground: 183 15% 55%;
+    --accent: 183 30% 16%;
+    --accent-foreground: 180 10% 95%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 184 30% 16%;
+    --input: 183 30% 16%;
+    --ring: 184 93% 50%;
   }
 }
 
@@ -59,7 +61,42 @@
   }
 }
 
-/* Mobile-first safe area support */
+/* ── Glass card utility ────────────────────────────────────────────────────── */
+@layer components {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(13, 223, 242, 0.1);
+  }
+
+  .glass-card-light {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(11, 189, 204, 0.2);
+  }
+
+  .glass-member {
+    background: rgba(13, 223, 242, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(13, 223, 242, 0.3);
+  }
+
+  .glass-admin {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* ── Mobile-first safe area support ───────────────────────────────────────── */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pb-safe {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
 }

@@ -3,30 +3,36 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@/store/auth";
 import { userApi, publicApi } from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { statusColor } from "@/lib/utils";
+import { statusColor, truncateHash } from "@/lib/utils";
 import Link from "next/link";
 import {
   Wallet,
   Building2,
   Layers,
-  TrendingUp,
   ArrowRight,
   Plus,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Copy,
 } from "lucide-react";
+import { useState } from "react";
 
 export default function DashboardPage() {
   const { hasHydrated, user } = useAuthStore();
+  const [copied, setCopied] = useState(false);
 
   if (!hasHydrated) {
     return (
-      <div className="space-y-5">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-28 w-full" />
-        <Skeleton className="h-28 w-full" />
+      <div className="space-y-4">
+        <Skeleton className="h-40 w-full rounded-2xl" />
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-12 rounded-xl" />
+          <Skeleton className="h-12 rounded-xl" />
+        </div>
+        <Skeleton className="h-32 w-full rounded-2xl" />
       </div>
     );
   }
@@ -49,108 +55,150 @@ export default function DashboardPage() {
     refetchInterval: 15_000,
   });
 
+  function copyAddress() {
+    if (!wallet?.address) return;
+    navigator.clipboard.writeText(wallet.address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-bold">Welcome back, {user?.username}</h1>
-        <p className="text-sm text-muted-foreground">Here's your ecosystem overview.</p>
+        <h1 className="text-xl font-bold">Welcome, {user?.first_name || user?.username}</h1>
+        <p className="text-sm text-muted-foreground">Your ecosystem overview.</p>
       </div>
 
-      {/* Wallet card */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-              <Wallet className="h-4 w-4" /> Wallet
-            </CardTitle>
-            <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+      {/* Wallet balance card */}
+      <div className="glass-card dark:glass-card glass-card-light rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-primary" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Main Wallet Balance</span>
+          </div>
+          <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-primary hover:bg-primary/10 -mr-2">
+            <Link href="/dashboard/wallet">
+              Manage <ArrowRight className="ml-1 h-3 w-3" />
+            </Link>
+          </Button>
+        </div>
+
+        {walletLoading ? (
+          <Skeleton className="h-10 w-48" />
+        ) : wallet ? (
+          <>
+            <p className="text-4xl font-bold font-mono">
+              {wallet.balance}{" "}
+              <span className="text-lg font-normal text-primary">SHELL</span>
+            </p>
+            <button
+              onClick={copyAddress}
+              className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <span className="font-mono">{truncateHash(wallet.address, 8)}</span>
+              <Copy className="h-3 w-3" />
+              {copied && <span className="text-primary text-[10px]">Copied!</span>}
+            </button>
+          </>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground">No wallet yet.</p>
+            <Button asChild size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
               <Link href="/dashboard/wallet">
-                Manage <ArrowRight className="ml-1 h-3 w-3" />
+                <Plus className="mr-1 h-3 w-3" /> Create
               </Link>
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {walletLoading ? (
-            <Skeleton className="h-8 w-32" />
-          ) : wallet ? (
-            <div>
-              <p className="text-2xl font-bold">{wallet.balance} <span className="text-base font-normal text-muted-foreground">SHELL</span></p>
-              <p className="text-xs text-muted-foreground font-mono mt-1 truncate">{wallet.address}</p>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <p className="text-sm text-muted-foreground">No wallet yet.</p>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/dashboard/wallet">
-                  <Plus className="mr-1 h-3 w-3" /> Create
-                </Link>
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        )}
+
+        {/* Quick actions */}
+        {wallet && (
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <Button
+              asChild
+              className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl font-bold"
+            >
+              <Link href="/dashboard/transactions">
+                <ArrowUpRight className="mr-2 h-4 w-4" /> Send
+              </Link>
+            </Button>
+            <Button
+              variant="secondary"
+              className="rounded-xl font-bold"
+              onClick={copyAddress}
+            >
+              <ArrowDownLeft className="mr-2 h-4 w-4" /> Receive
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Authority card */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-              <Building2 className="h-4 w-4" /> Authority
-            </CardTitle>
-            <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
-              <Link href="/dashboard/authority">
-                View <ArrowRight className="ml-1 h-3 w-3" />
-              </Link>
+      <div className="glass-card dark:glass-card glass-card-light rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4 text-primary" />
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Authority</span>
+          </div>
+          <Button asChild variant="ghost" size="sm" className="h-7 text-xs text-primary hover:bg-primary/10 -mr-2">
+            <Link href="/dashboard/authority">
+              View <ArrowRight className="ml-1 h-3 w-3" />
+            </Link>
+          </Button>
+        </div>
+
+        {authorityLoading ? (
+          <Skeleton className="h-6 w-40" />
+        ) : authority ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">{authority.name}</p>
+            <Badge variant={statusColor(authority.status)} className="capitalize text-xs">
+              {authority.status}
+            </Badge>
+            {user?.authority_role && (
+              <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary">
+                {user.authority_role}
+              </Badge>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-muted-foreground">Not affiliated.</p>
+            <Button asChild size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Link href="/dashboard/authority">Join or Create</Link>
             </Button>
           </div>
-        </CardHeader>
-        <CardContent>
-          {authorityLoading ? (
-            <Skeleton className="h-6 w-40" />
-          ) : authority ? (
-            <div className="flex items-center gap-2">
-              <p className="font-semibold">{authority.name}</p>
-              <Badge variant={statusColor(authority.status)} className="capitalize text-xs">
-                {authority.status}
-              </Badge>
-              {user?.authority_role && (
-                <Badge variant="outline" className="text-xs capitalize">{user.authority_role}</Badge>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <p className="text-sm text-muted-foreground">Not affiliated.</p>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/dashboard/authority">Join or Create</Link>
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* Recent blocks */}
-      <div>
-        <div className="flex items-center gap-2 mb-2">
+      <section>
+        <div className="flex items-center gap-2 mb-3">
           <Layers className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">Recent Blocks</h2>
+          <h2 className="text-sm font-bold uppercase tracking-wider">Recent Blocks</h2>
         </div>
-        <div className="space-y-1.5">
-          {blocks?.slice(0, 5).map((b) => (
-            <Card key={b.hash}>
-              <CardContent className="flex items-center justify-between py-2 px-4">
-                <div>
-                  <span className="text-sm font-medium">Block #{b.height}</span>
-                  <span className="text-xs text-muted-foreground ml-2">{b.tx_count} txns</span>
-                </div>
-                <Badge variant={b.valid_poa ? "default" : "destructive"} className="text-xs">
+        <div className="space-y-2">
+          {blocks?.slice(0, 5).map((b, idx) => (
+            <div
+              key={b.hash}
+              className={`glass-card dark:glass-card glass-card-light p-3 rounded-xl flex items-center justify-between border-l-4 ${
+                idx === 0 ? "border-l-primary" : "border-l-primary/20"
+              }`}
+            >
+              <div>
+                <span className="text-xs text-muted-foreground">Block #{b.height}</span>
+                <p className="font-mono text-xs text-foreground/70 truncate w-40">{truncateHash(b.hash, 8)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">{b.tx_count} TXs</span>
+                <Badge variant={b.valid_poa ? "default" : "destructive"} className="text-[10px]">
                   {b.valid_poa ? "Valid" : "Invalid"}
                 </Badge>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

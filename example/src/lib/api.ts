@@ -7,6 +7,7 @@ import type {
   Authority,
   AuthorityStats,
   Block,
+  ChainEvent,
   FieldDefinition,
   Invitation,
   KYCRecord,
@@ -140,6 +141,8 @@ export const publicApi = {
   getBlocks: () => request<Block[]>("/blocks", {}, false),
   getBlock: (hash: string) => request<Block>(`/blocks/${hash}`, {}, false),
   getValue: () => request<ValueRecord[]>("/value", {}, false),
+  getChainEvents: (type?: string) =>
+    request<ChainEvent[]>(`/chain/events${type ? `?type=${type}` : ""}`, {}, false),
 };
 
 // ---------------------------------------------------------------------------

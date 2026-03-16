@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/goozt/seashell/blockchain"
+	"github.com/goozt/seashell/model"
 	"github.com/goozt/seashell/store"
 	"github.com/goozt/seashell/wallet"
 )
@@ -141,12 +142,14 @@ func (cs *ChainService) GetBalance(address string) (int, error) {
 
 // CreateAndSubmit builds, signs, and seals a transaction in a new block.
 // senderPrivKey is the transaction sender's ECDSA key.
+// proof is an optional identity proof that is embedded in the transaction; pass nil for unverified senders.
 // The block validator is determined by round-robin from the registered validator list.
 func (cs *ChainService) CreateAndSubmit(
 	fromAddress, toAddress string,
 	amount int,
 	senderPrivKey ecdsa.PrivateKey,
 	senderPubKey []byte,
+	proof *model.IdentityProof,
 ) (*TxResult, error) {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -190,7 +193,7 @@ func (cs *ChainService) CreateAndSubmit(
 		outputs = append(outputs, *blockchain.NewTxOutput(acc-amount, fromAddress))
 	}
 
-	tx := &blockchain.Transaction{Inputs: inputs, Outputs: outputs}
+	tx := &blockchain.Transaction{Inputs: inputs, Outputs: outputs, IdentityProof: proof}
 	tx.Id = tx.Hash()
 	chain.SignTransaction(tx, senderPrivKey)
 
@@ -351,6 +354,112 @@ func privKeyFromD(dBytes []byte) ecdsa.PrivateKey {
 	return *priv
 }
 
+// recordEvent creates a new block carrying a single governance event, signed by
+// the authority whose ID is given. Caller must NOT hold cs.mu.
+func (cs *ChainService) recordEvent(event blockchain.ChainEvent, authorityID string) error {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	chain, err := cs.openChain()
+	if err != nil {
+		return err
+	}
+	defer chain.Close()
+
+	validatorPubKey, validatorPrivKey, err := cs.getNextValidator(chain)
+	if err != nil {
+		return fmt.Errorf("get validator: %w", err)
+	}
+
+	// Set the block height in the event before signing.
+	event.Height = chain.GetCurrentHeight() + 1
+	if err := event.Sign(validatorPrivKey); err != nil {
+		return fmt.Errorf("sign event: %w", err)
+	}
+
+	// Build a block carrying only the governance event (no financial transactions).
+	// Events are signed individually so they don't need to be in the block hash.
+	block := blockchain.NewBlock([]*blockchain.Transaction{}, chain.LastHash, event.Height, validatorPubKey, validatorPrivKey)
+	block.Events = []blockchain.ChainEvent{event}
+
+	// AddExternalBlock validates PoA + prevHash + height, then stores.
+	// This is the correct path for a locally-constructed block too.
+	if err := chain.AddExternalBlock(block); err != nil {
+		return fmt.Errorf("store event block: %w", err)
+	}
+
+	newHash := make([]byte, len(chain.LastHash))
+	copy(newHash, chain.LastHash)
+	if cb := cs.onBlock; cb != nil {
+		go cb(newHash)
+	}
+	return nil
+}
+
+// RecordAuthorityRegistered writes an on-chain event when an authority is approved.
+func (cs *ChainService) RecordAuthorityRegistered(authorityID, authorityName, validatorPubKey string) error {
+	event := blockchain.ChainEvent{
+		Type:            blockchain.EventTypeAuthorityRegistered,
+		AuthorityID:     authorityID,
+		AuthorityName:   authorityName,
+		ValidatorPubKey: validatorPubKey,
+	}
+	if err := cs.recordEvent(event, authorityID); err != nil {
+		log.Printf("chain: record authority_registered event: %v", err)
+		return err
+	}
+	log.Printf("chain: authority_registered event recorded for %s (%s)", authorityName, authorityID)
+	return nil
+}
+
+// RecordUserVerified writes an on-chain event when a verified user creates a wallet.
+func (cs *ChainService) RecordUserVerified(authorityID, authorityName, userIDHash, walletAddress string) error {
+	event := blockchain.ChainEvent{
+		Type:          blockchain.EventTypeUserVerified,
+		AuthorityID:   authorityID,
+		AuthorityName: authorityName,
+		UserIDHash:    userIDHash,
+		WalletAddress: walletAddress,
+	}
+	if err := cs.recordEvent(event, authorityID); err != nil {
+		log.Printf("chain: record user_verified event: %v", err)
+		return err
+	}
+	log.Printf("chain: user_verified event recorded for authority %s", authorityName)
+	return nil
+}
+
+// GetEventsFromChain scans the chain and returns all ChainEvents, optionally filtered
+// by eventType (pass "" to return all types). Results are ordered newest-first.
+func (cs *ChainService) GetEventsFromChain(eventType string, limit int) ([]blockchain.ChainEvent, error) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	chain, err := cs.openChain()
+	if err != nil {
+		return nil, err
+	}
+	defer chain.Close()
+
+	var events []blockchain.ChainEvent
+	iter := chain.Iterator()
+	for {
+		block := iter.Next()
+		for _, e := range block.Events {
+			if eventType == "" || e.Type == eventType {
+				events = append(events, e)
+				if limit > 0 && len(events) >= limit {
+					return events, nil
+				}
+			}
+		}
+		if len(block.PrevHash) == 0 {
+			break
+		}
+	}
+	return events, nil
+}
+
 // GetTransactionsForAddress returns all transactions involving a given address.
 func (cs *ChainService) GetTransactionsForAddress(address string) ([]map[string]interface{}, error) {
 	cs.mu.Lock()
@@ -390,12 +499,14 @@ func (cs *ChainService) GetTransactionsForAddress(address string) ([]map[string]
 				}
 			}
 			if involved {
-				result = append(result, map[string]interface{}{
+				entry := map[string]interface{}{
 					"tx_id":        hex.EncodeToString(tx.Id),
 					"block_height": block.Height,
 					"block_hash":   hex.EncodeToString(block.Hash),
 					"is_coinbase":  tx.IsCoinbase(),
-				})
+					"identity_proof": tx.IdentityProof,
+				}
+				result = append(result, entry)
 			}
 		}
 		if len(block.PrevHash) == 0 {

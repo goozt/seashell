@@ -1,48 +1,48 @@
 # Architecture
 
-SeaShell is a Proof of Authority cryptocurrency with a UTXO transaction model, a multi-role REST API, a P2P node network, and a Next.js management UI. This document describes how all the pieces fit together.
+SeaShell is a Proof of Authority cryptocurrency with a UTXO transaction model, a multi-role REST API, a flat P2P node network, and a Next.js management UI. This document describes how all the pieces fit together.
 
 ---
 
 ## System Overview
 
 ```
-                     ┌────────────────────────────────────────────────┐
-                     │                 PRIMARY NODE                   │
-                     │                                                │
-                     │   ┌──────────┐  ┌────────────┐  ┌───────────┐  │
-                     │   │ REST API │  │ Blockchain │  │   Store   │  │
-                     │   │  (chi)   │──│ (BadgerDB) │  │ (BadgerDB)│  │
-                     │   └────┬─────┘  └────────────┘  └───────────┘  │
-                     │        │   Node Registry (source of truth)     │
-                     └────────┼───────────────────────────────────────┘
-                  ┌───────────┴─────────────┐
-                  │    P2P HTTP Layer       │
-                  │  (block broadcast,      │
-                  │   peer discovery,       │
-                  │   chain sync)           │
-        ┌─────────┴───────────┐   ┌─────────┴───────────┐
-        │     NODE A          │   │     NODE B          │
-        │  (Authority 1)      │   │  (Authority 2)      │
-        │                     │   │                     │
-        │  ┌───────────────┐  │   │  ┌───────────────┐  │
-        │  │ REST API      │  │   │  │ REST API      │  │
-        │  │ + local users │  │   │  │ + local users │  │
-        │  └───────────────┘  │   │  └───────────────┘  │
-        │  ┌───────────────┐  │   │  ┌───────────────┐  │
-        │  │  Blockchain   │  │   │  │  Blockchain   │  │
-        │  │  (synced)     │  │   │  │  (synced)     │  │
-        │  └───────────────┘  │   │  └───────────────┘  │
-        └─────────────────────┘   └─────────────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │               PRIMARY NODE                   │
+                    │  - Node registry (source of truth)           │
+                    │  - Approves / rejects node and authority     │
+                    │    join requests                             │
+                    │  - Monitoring and governance                 │
+                    │  - Also hosts its own authority's users      │
+                    └────────┬──────────────────┬──────────────────┘
+                             │ P2P HTTP          │ P2P HTTP
+                    (flat broadcast — all active peers receive every block)
+                             │                  │
+              ┌──────────────▼──────┐  ┌────────▼──────────────┐
+              │   BRANCH NODE A     │  │   BRANCH NODE B       │
+              │   Authority A       │  │   Authority B         │
+              │                     │  │                       │
+              │  ┌───────────────┐  │  │  ┌───────────────┐   │
+              │  │ REST API      │  │  │  │ REST API      │   │
+              │  │ + Authority A │  │  │  │ + Authority B │   │
+              │  │   users       │  │  │  │   users       │   │
+              │  └───────────────┘  │  │  └───────────────┘   │
+              │  ┌───────────────┐  │  │  ┌───────────────┐   │
+              │  │  Blockchain   │  │  │  │  Blockchain   │   │
+              │  │  (synced)     │  │  │  │  (synced)     │   │
+              │  └───────────────┘  │  │  └───────────────┘   │
+              └─────────────────────┘  └───────────────────────┘
 ```
 
 **Key principles:**
 
-- The blockchain is replicated identically across every active node
-- User accounts, wallets, and tickets are local to each node
-- The primary node owns the node registry and approves new members
-- P2P communication is plain HTTP REST authenticated by a shared secret
-- New blocks are pushed to all peers; new nodes pull the full chain on join
+- The blockchain is replicated identically across every active node.
+- Each authority runs one node and manages its own users locally (federated model).
+- To send SHELL to a user at another authority you only need their wallet **address** — no cross-node user lookup is required (UTXO is address-based).
+- The primary node owns the node registry and approves new members; all other nodes are branch nodes and equal P2P peers.
+- When a block is created on any node it is broadcast to **all** active peers simultaneously.
+- New nodes pull the full chain from the primary on join; blocks are pushed to all peers thereafter.
+- P2P communication is plain HTTP REST authenticated by a shared secret (`NODE_SECRET`).
 
 ---
 
@@ -167,6 +167,7 @@ All configuration is loaded from environment variables by `config.Load()`.
 | `NODE_URL` | `` | No | This node's publicly reachable URL |
 | `PRIMARY_NODE_URL` | `` | No | Primary node URL (omit if this IS primary) |
 | `IS_PRIMARY` | `false` | No | Set `true` on the genesis node |
+| `NODE_TIER` | `branch` | No | `primary` or `branch` (auto-set by `IS_PRIMARY`) |
 | `NODE_SECRET` | insecure default | No | Shared P2P authentication secret |
 
 The database directory layout under `$DB_PATH`:
@@ -189,10 +190,16 @@ type Block struct {
     Timestamp    uint
     PrevHash     []byte
     Transactions []*Transaction
-    Hash         []byte          // SHA256(PrevHash || TxRoot || Timestamp || Height)
+    Events       []ChainEvent      // governance events (authority_registered, user_verified)
+    Hash         []byte            // SHA256(PrevHash || TxRoot || Timestamp || Height)
     Height       uint64
-    Validator    []byte          // 64-byte ECDSA P256 public key
-    Signature    []byte          // 64-byte ECDSA signature (r || s)
+    Validator    []byte            // 64-byte ECDSA P256 public key (lead validator)
+    Signatures   []ValidatorSig    // PoA quorum signatures
+}
+
+type ValidatorSig struct {
+    PubKey []byte  // 64-byte ECDSA P256 public key
+    Sig    []byte  // 64-byte ECDSA signature (r || s)
 }
 ```
 
@@ -209,7 +216,7 @@ Blocks are GOB-encoded for storage in BadgerDB.
 
 ### Consensus: Proof of Authority
 
-Blocks are not mined. Instead, a registered validator signs each block.
+Blocks are not mined. Instead, a registered validator signs each block and a quorum of other validators co-sign.
 
 **Validator selection** is deterministic round-robin by block height:
 
@@ -217,13 +224,130 @@ Blocks are not mined. Instead, a registered validator signs each block.
 validator = validators[height % len(validators)]
 ```
 
-**Block signing** uses ECDSA P256 over `SHA256(PrevHash || TxRoot || Timestamp || Height)`. The signature is stored as a fixed 64-byte value: 32 bytes for `r`, 32 bytes for `s`, both zero-padded big-endian.
+**Quorum threshold:** a block is valid when it carries at least ⌈2N/3⌉ valid signatures from the registered validator set, where N is the total number of validators.
 
-**Validation** (`ValidateBlock`) checks that:
-1. The block's `Validator` field matches the expected round-robin selection
-2. The ECDSA signature is valid for the block hash
+**Block signing** uses ECDSA P256 over `SHA256(PrevHash || TxRoot || Timestamp || Height)`. Each signature is stored as a fixed 64-byte value: 32 bytes for `r`, 32 bytes for `s`, both zero-padded big-endian.
 
-Validators are added to the chain when an admin approves an authority request. The primary node broadcasts new validator keys to all peers.
+**Validation** (`ValidateBlock`) checks:
+1. The block carries ≥ ⌈2N/3⌉ valid signatures from registered validators.
+2. Each signature is valid ECDSA for the block hash.
+3. The genesis block (height 0) is always valid.
+
+Validators are added to the chain when an admin approves an authority request. The approving node broadcasts the new validator key to all peers.
+
+### Identity Proof
+
+An **IdentityProof** is an authority-signed credential attached to every transaction sent by a verified user. It cryptographically binds a wallet address to a verified identity without exposing raw user data on-chain.
+
+```go
+type IdentityProof struct {
+    WalletAddress   string  // Must match the transaction sender
+    UserIDHash      string  // hex(SHA256(userID + ":" + authorityID)) — privacy-preserving
+    AuthorityID     string  // UUID of the issuing authority
+    AuthorityName   string  // Human-readable label
+    AuthorityPubKey string  // hex 64-byte ECDSA P256 public key (same as validator key)
+    Sig             string  // hex 64-byte ECDSA sig over SHA256(WalletAddress+":"+UserIDHash+":"+AuthorityID)
+}
+```
+
+**Lifecycle:**
+
+```
+User verification approved
+        ↓
+User creates wallet
+        ↓  (api/handlers/user.go CreateWallet)
+verifySvc.IssueIdentityProof(userID, authorityID, walletAddress)
+  → Load authority private key from store
+  → Compute UserIDHash = hex(SHA256(userID + ":" + authorityID))
+  → Sign SHA256(walletAddress + ":" + userIDHash + ":" + authorityID)
+  → Store proof keyed by userID (identity_proof:<userID>)
+        ↓
+User sends transaction
+        ↓  (api/handlers/user.go CreateTransaction)
+db.GetIdentityProof(userID)   ← loads the proof
+        ↓
+chainSvc.CreateAndSubmit(..., proof)
+  → proof attached to Transaction.IdentityProof field
+  → serialised into the block via GOB encoding
+  → permanently on-chain
+```
+
+**Verification by any node:**
+
+```
+proof.Sig verified with proof.AuthorityPubKey
+  AND proof.AuthorityPubKey is in the registered validator set
+  AND proof.WalletAddress == transaction sender address
+  → sender was verified by their authority ✓
+```
+
+Any party can call `service.VerifyIdentityProof(proof)` to independently confirm a proof without querying any database. The authority's registered validator key (already stored in the blockchain's validator set) is the only trust anchor needed.
+
+**Privacy:** Raw user IDs are never stored on-chain. `UserIDHash` is a salted SHA256 hash — the issuing authority can map a specific user to their hash for audit purposes, but the hash alone reveals nothing to external observers.
+
+**Backward compatibility:** `IdentityProof` is a pointer field on `Transaction`. Existing blocks without proofs (nil field) remain fully valid.
+
+### Chain Events
+
+**ChainEvents** are signed governance records embedded in blocks alongside (or instead of) financial transactions. They create an immutable, cryptographically-verifiable audit trail of ecosystem governance directly from chain data.
+
+```go
+type ChainEvent struct {
+    Type            string  // "authority_registered" | "user_verified"
+    AuthorityID     string  // UUID of the subject authority
+    AuthorityName   string  // Human-readable label
+    Height          uint64  // Block height (prevents replay across forks)
+    ValidatorPubKey string  // hex 64-byte — set for authority_registered
+    UserIDHash      string  // hex SHA256(userID+":"+authorityID) — set for user_verified
+    WalletAddress   string  // wallet bound to the verified user — set for user_verified
+    SignerPubKey    []byte  // 64-byte ECDSA P256 public key of the signing validator
+    Sig             []byte  // 64-byte ECDSA sig over SHA256(canonical JSON of unsigned fields)
+}
+```
+
+Events are **not** included in the block's `computeHash()` so blocks with events remain backward-compatible with existing chain data. Each event carries its own ECDSA signature from the validator that recorded it.
+
+**Event types:**
+
+| Type | When recorded | Key fields |
+|------|---------------|------------|
+| `authority_registered` | Admin approves authority request | `AuthorityID`, `AuthorityName`, `ValidatorPubKey` |
+| `user_verified` | User creates wallet after verification | `AuthorityID`, `UserIDHash`, `WalletAddress` |
+
+**Lifecycle — Authority Registration:**
+
+```
+Admin approves authority request
+        ↓  (api/handlers/admin.go ApproveAuthorityRequest)
+chainSvc.RecordAuthorityRegistered(authorityID, authorityName, validatorPubKey)
+  → Gets next round-robin validator
+  → Creates event, sets Height, signs with validator key
+  → Mines block with empty Transactions + event in Events[]
+  → Broadcasts block to all peers via onBlock callback
+```
+
+**Lifecycle — User Verification:**
+
+```
+User creates wallet (after passing authority verification)
+        ↓  (api/handlers/user.go CreateWallet)
+verifySvc.IssueIdentityProof(userID, authorityID, walletAddress)
+        ↓
+chainSvc.RecordUserVerified(authorityID, authorityName, userIDHash, walletAddress)
+  → Same event-block creation and broadcast flow as above
+```
+
+**Querying events:**
+
+```
+GET /api/v1/chain/events                          — all recent (newest first, limit 50)
+GET /api/v1/chain/events?type=authority_registered
+GET /api/v1/chain/events?type=user_verified
+GET /api/v1/blocks/{hash}                         — block detail includes events[] and event_count
+```
+
+**Verification:** Any peer can call `event.Verify()` to confirm the ECDSA signature without a database lookup. Cross-referencing `SignerPubKey` against the validator set in the chain confirms the signer was authorised.
 
 ### UTXO Transaction Model
 
@@ -282,9 +406,9 @@ In CLI mode, wallets are persisted as a GOB-encoded map in `$DB_PATH/wallets.dat
 The API database is a separate BadgerDB instance at `$DB_PATH/api`. All values are JSON-marshaled. The store provides typed CRUD methods built on generic helpers:
 
 ```go
-set(key, value)       // JSON marshal and store
-get(key, &target)     // Retrieve and unmarshal
-del(key)              // Delete
+set(key, value)        // JSON marshal and store
+get(key, &target)      // Retrieve and unmarshal
+del(key)               // Delete
 iterPrefix(prefix, fn) // Scan all keys with a given prefix
 ```
 
@@ -308,6 +432,7 @@ iterPrefix(prefix, fn) // Scan all keys with a given prefix
 | `verifyconfig:` | Authority verification configurations |
 | `verifysub:` | Verification submissions (by UUID) |
 | `idx:verifysub:user:` | User+Authority → latest submission index |
+| `identity_proof:` | Authority-signed identity proofs (by userID) |
 
 ---
 
@@ -363,6 +488,7 @@ type Node struct {
     ValidatorPubKey string
     Status          string      // "pending" | "active" | "offline" | "suspended" | "rejected"
     IsPrimary       bool
+    NodeTier        string      // "primary" | "branch"
     BlockHeight     uint64
     Version         string
     LastSeenAt      *time.Time
@@ -378,7 +504,7 @@ type Node struct {
 - **Ticket** — Support ticket with replies, statuses (`open`, `in_progress`, `resolved`, `closed`), scoped to an authority.
 - **Invitation** — One-time-use code for joining an authority, with expiration.
 - **ValueRecord** — Snapshot of an authority's token price at a given block height: price, transaction volume, circulating supply, and velocity.
-- **VerificationConfig** — Per-authority configuration for the modular verification system. Contains `Method` (currently `"manual"`) and `Fields` (array of `FieldDefinition` with name, label, input type, and validation rules). Extensible for future 3rd-party API and OAuth-based methods.
+- **VerificationConfig** — Per-authority configuration for the modular verification system. Contains `Method` (currently `"manual"`) and `Fields` (array of `FieldDefinition` with name, label, input type, and validation rules).
 - **VerificationSubmission** — A user's verification attempt. Contains submitted field values (`map[string]string`), status (`pending`/`approved`/`rejected`), reviewer remarks, and timestamps.
 
 ---
@@ -399,11 +525,11 @@ Thread-safe wrapper around the blockchain. All chain operations acquire a mutex.
 
 Key operations:
 - `CreateAndSubmit(from, to, amount, privKey, pubKey)` — Builds transaction, signs it, creates and signs a block, stores it, triggers the `onBlock` callback for P2P broadcast.
-- `AddExternalBlock(block)` — Accepts a peer-received block after validating PoA signature, prevHash linkage, and height sequence.
+- `AddExternalBlock(block)` — Accepts a peer-received block after validating PoA quorum, prevHash linkage, and height sequence.
 - `GetBalance(address)` — Sums all unspent outputs for an address.
 - `GetBlocks(limit)` / `GetBlocksFromHeight(from, limit)` — Block retrieval for the UI and P2P sync.
 
-The `onBlock` callback is wired to `NodeService.OnBlockMined` during server startup, which triggers broadcast to all active peers.
+The `onBlock` callback is wired to `NodeService.OnBlockMined` during server startup.
 
 ### Value Service
 
@@ -424,16 +550,16 @@ Recalculated after each block that involves authority members.
 Orchestrates the node lifecycle:
 
 **Primary bootstrap:**
-1. Create a self-referencing Node record (status=active, is_primary=true)
-2. Start the health checker
+1. Create a self-referencing Node record (status=active, is_primary=true) if it doesn't exist.
+2. Start the health checker.
 
-**Secondary bootstrap:**
-1. Check if already approved locally
-2. If not, log a waiting message and return (approval happens via the primary's superadmin UI)
-3. Once approved: full-sync the chain from primary, start the health checker
+**Branch bootstrap:**
+1. Check if already approved locally (status=active in local store).
+2. If yes: sync the chain from primary, start health checker → live.
+3. If not: log a waiting message. The node is registered via the primary's superadmin UI.
 
 **Ongoing:**
-- `OnBlockMined(blockHash)` — Broadcasts the new block to all active peers. Also broadcasts any new validator keys if an authority was just approved.
+- `OnBlockMined(blockHash)` — Broadcasts the new block to **all** active peers (flat fan-out). Also broadcasts any new validator keys if an authority was just approved.
 
 ---
 
@@ -477,7 +603,7 @@ Every response uses a standard JSON envelope:
 | GET | `/api/v1/blocks` | List blocks |
 | GET | `/api/v1/blocks/{hash}` | Get block by hash |
 | GET | `/api/v1/value` | Current prices |
-| POST | `/api/v1/nodes/register` | Node join request (from secondary) |
+| POST | `/api/v1/nodes/register` | Node join request (from branch node) |
 
 **Auth:**
 
@@ -572,17 +698,17 @@ Each node maintains HTTP clients for communicating with peers. All requests incl
 
 ### Chain Sync
 
-**Full sync** — Used when a newly approved node joins the network. Downloads the entire chain from a peer in batches of 100 blocks, validating each block's PoA signature and chain linkage before storing.
+**Full sync** — Used when a newly approved node joins the network. Downloads the entire chain from the primary in batches of 100 blocks, validating each block's PoA quorum and chain linkage before storing.
 
-**Incremental sync** — Fetches blocks after the local chain tip. Used for catch-up after brief disconnections.
+**Incremental sync** — Fetches blocks after the local chain tip. Used on restart after approval.
 
 ### Block Broadcasting
 
 When a node creates a new block, the `onBlock` callback fires:
 
-1. Retrieve the list of active peers (excluding self)
-2. Spawn a goroutine per peer to POST the block
-3. Wait for all to complete; log errors but don't fail
+1. Retrieve the list of all active peers (excluding self).
+2. Spawn a goroutine per peer to POST the block to `/p2p/v1/blocks`.
+3. Wait for all to complete; log errors but don't fail.
 
 The same fan-out pattern is used to broadcast new validator keys.
 
@@ -590,10 +716,10 @@ The same fan-out pattern is used to broadcast new validator keys.
 
 A background goroutine runs on each node:
 
-- Every 30 seconds, pings all known active peers via `POST /p2p/v1/ping`
-- On success: updates `LastSeenAt`, `BlockHeight`, and `Status`
-- On failure: marks the node as `offline`
-- Updates are persisted to the local store
+- Every 30 seconds, pings all known active peers via `POST /p2p/v1/ping`.
+- On success: updates `LastSeenAt`, `BlockHeight`, and `Status=active`.
+- On failure: marks the node as `offline`.
+- Updates are persisted to the local store.
 
 ---
 
@@ -647,88 +773,85 @@ The Next.js app lives in `example/` and communicates with the Go API via a typed
 ### Transaction
 
 ```
-User -> POST /user/transactions { to_address, amount }
-  -> Load user's wallet private key from store
-  -> ChainService.CreateAndSubmit():
+User → POST /user/transactions { to_address, amount }
+  → Load user's wallet private key from store
+  → Load user's IdentityProof from store (nil if not issued)
+  → ChainService.CreateAndSubmit(..., proof):
        Find spendable UTXOs
        Build transaction (inputs referencing UTXOs, outputs to recipient + change)
+       Attach IdentityProof to transaction (nil for unverified senders)
        Sign each input with sender's private key
-       Create block with coinbase + transaction
+       Create block (coinbase + transaction)
        Sign block with authority validator key
+       Collect co-signatures from other validators (quorum)
        Store block in BadgerDB
        Fire onBlock callback
-  -> NodeService.OnBlockMined():
-       Broadcast block to all active peers
-  -> ValueService.RecalculateForAuthority():
+  → NodeService.OnBlockMined():
+       Broadcast block to ALL active peers simultaneously
+  → ValueService.RecalculateForAuthority():
        Recompute token price using Velocity of Money formula
-  -> Return transaction result to user
+  → Return transaction result to user
 ```
 
-### Authority Approval
+### Cross-Authority Transaction
 
 ```
-User -> POST /user/authority { name, description }
-  -> Authority created with status=pending
-
-Admin -> POST /admin/authority-requests/{id}/approve { base_price, sensitivity_k }
-  -> Generate ECDSA P256 key pair
-  -> Register public key as blockchain validator
-  -> Store private key in API database
-  -> Set authority status=active
-  -> Broadcast new validator key to all peers
+User A (on Authority A's node)
+  → POST /user/transactions { to_address: <User B's wallet address>, amount }
+  → No cross-node lookup needed — User B's address is just a blockchain address
+  → Block is created and broadcast to all nodes including Authority B's node
+  → Authority B's node now shows the new UTXO spendable by User B's key
 ```
 
 ### Node Join
 
 ```
-New node starts with NODE_URL + PRIMARY_NODE_URL configured
-  -> POST primary/api/v1/nodes/register { node_url, authority_name, ... }
-  -> Primary stores NodeJoinRequest (status=pending)
+New branch node starts with NODE_URL + PRIMARY_NODE_URL configured
+  → POST primary/api/v1/nodes/register { node_url, authority_name, ... }
+  → Primary stores NodeJoinRequest (status=pending)
 
-Primary superadmin -> POST /superadmin/node-requests/{id}/approve
-  -> Create Node record (status=active)
-  -> Return peer list
+Primary superadmin → POST /superadmin/node-requests/{id}/approve
+  → Create Node record (status=active)
+  → Return peer list
 
-New node:
-  -> FullSync from primary (batches of 100 blocks)
-  -> Fetch peer list
-  -> Start health checker
-  -> Begin normal operation
+New node (on next start or restart):
+  → Detects local status=active
+  → IncrementalSync from primary (batches of 100 blocks)
+  → Start health checker
+  → Begin normal operation — blocks flow to/from all peers
+```
+
+### Authority Approval
+
+```
+User → POST /user/authority { name, description }
+  → Authority created with status=pending
+
+Admin → POST /admin/authority-requests/{id}/approve { base_price, sensitivity_k }
+  → Generate ECDSA P256 key pair
+  → Register public key as blockchain validator
+  → Store private key in API database
+  → Set authority status=active
+  → Broadcast new validator key to all peers
 ```
 
 ### Modular Verification
 
 ```
-Authority owner -> PUT /authority/verification/config { method: "manual", fields: [...] }
-  -> Validate field definitions (unique names, valid types)
-  -> Store VerificationConfig for authority
-  -> Members can now see the verification form
+Authority owner → PUT /authority/verification/config { method: "manual", fields: [...] }
+  → Store VerificationConfig for authority
 
-Member -> GET /user/verification
-  -> If authority has no config: { config_status: "not_configured" }
-  -> If configured: return config fields + latest submission (if any)
+Member → POST /user/verification { field_values: { ... } }
+  → Validate against config rules
+  → Create VerificationSubmission (status=pending)
 
-Member -> POST /user/verification { field_values: { ... } }
-  -> Validate field values against config (required, pattern, length)
-  -> Check no pending/approved submission exists
-  -> Create VerificationSubmission (status=pending)
-
-Owner -> GET /authority/verification/submissions?status=pending
-  -> List pending submissions with user info
-
-Owner -> POST /authority/verification/submissions/{id}/review { action: "approve" }
-  -> Set submission status=approved
-  -> User can now create a wallet
-
-Owner -> POST /authority/verification/submissions/{id}/review { action: "reject", remarks: "..." }
-  -> Set submission status=rejected with remarks
-  -> User sees remarks and can resubmit
+Owner → POST /authority/verification/submissions/{id}/review { action: "approve" }
+  → submission status=approved → user can now create a wallet
 
 Wallet gate:
   POST /user/wallet
-  -> If user is affiliated: check IsUserVerified(userID, authorityID)
-  -> If not verified: return 403 "verification required"
-  -> If verified: proceed with wallet creation
+  → If user is affiliated: check IsUserVerified(userID, authorityID)
+  → If not verified: 403 "verification required"
 ```
 
 ---
@@ -754,8 +877,8 @@ Wallet gate:
 - **Passwords** — bcrypt with cost 12.
 - **JWT** — HS256 with configurable secret. 15-minute access tokens limit the blast radius of a leaked token.
 - **P2P authentication** — Shared secret in `X-Node-Secret` header. All nodes in the network must have the same value.
-- **Private keys at rest** — Stored as raw D bytes in BadgerDB, unencrypted. In production, use disk encryption or a KMS.
-- **Chain validation** — Every block received via P2P is independently validated: PoA signature, prevHash linkage, height sequence.
+- **Private keys at rest** — Stored encrypted via AES-256-GCM when `KEY_ENCRYPTION_KEY` is set; raw otherwise. Use disk encryption or a KMS in production.
+- **Chain validation** — Every block received via P2P is independently validated: PoA quorum signatures, prevHash linkage, height sequence.
 - **No rate limiting** — Must be handled at the reverse proxy layer (nginx, Caddy, etc.).
 - **TLS** — Not terminated by the Go server; expected to be handled by a reverse proxy.
 
@@ -770,4 +893,4 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for systemd, nginx, and Docker setup.
 - `ui` — Next.js frontend (optional profile), configured with `NEXT_PUBLIC_API_URL`
 
 **Primary node** requires `IS_PRIMARY=true` and `SUPERADMIN_PASSWORD` set.
-**Secondary nodes** require `PRIMARY_NODE_URL` pointing to the primary and the same `NODE_SECRET`.
+**Branch nodes** require `PRIMARY_NODE_URL` pointing to the primary and the same `NODE_SECRET`.

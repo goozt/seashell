@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeftRight, Send, Loader2 } from "lucide-react";
+import { ArrowLeftRight, Send, Loader2, ShieldCheck } from "lucide-react";
 import { truncateHash } from "@/lib/utils";
 
 export default function TransactionsPage() {
@@ -119,34 +119,48 @@ export default function TransactionsPage() {
           </div>
         ) : transactions && transactions.length > 0 ? (
           <div className="space-y-2">
-            {transactions.map((tx, idx) => (
-              <Card key={tx.id ?? idx}>
-                <CardContent className="py-3 px-4">
-                  <div className="flex items-start justify-between">
-                    <div className="min-w-0">
-                      {tx.id && (
-                        <p className="font-mono text-xs text-muted-foreground truncate">
-                          {truncateHash(tx.id, 8)}
-                        </p>
-                      )}
-                      {tx.to_address && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          To: <span className="font-mono">{truncateHash(tx.to_address, 8)}</span>
-                        </p>
-                      )}
-                      {tx.block_height && (
-                        <p className="text-xs text-muted-foreground">Block #{tx.block_height}</p>
-                      )}
+            {transactions.map((tx, idx) => {
+              const txId = tx.tx_id ?? tx.id;
+              const verified = !!tx.identity_proof;
+              return (
+                <Card key={txId ?? idx}>
+                  <CardContent className="py-3 px-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        {txId && (
+                          <p className="font-mono text-xs text-muted-foreground truncate">
+                            {truncateHash(txId, 8)}
+                          </p>
+                        )}
+                        {tx.to_address && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            To: <span className="font-mono">{truncateHash(tx.to_address, 8)}</span>
+                          </p>
+                        )}
+                        {tx.block_height && (
+                          <p className="text-xs text-muted-foreground">Block #{tx.block_height}</p>
+                        )}
+                        {verified && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Verified by: <span className="font-medium">{tx.identity_proof!.authority_name}</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {tx.amount !== undefined && (
+                          <Badge variant="outline">{tx.amount} SHELL</Badge>
+                        )}
+                        {verified && (
+                          <Badge variant="secondary" className="flex items-center gap-1 text-green-700 bg-green-50 border-green-200">
+                            <ShieldCheck className="h-3 w-3" /> Verified
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    {tx.amount !== undefined && (
-                      <Badge variant="outline" className="shrink-0 ml-2">
-                        {tx.amount} SHELL
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-6">No transactions yet.</p>

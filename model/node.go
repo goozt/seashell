@@ -9,9 +9,8 @@ const (
 	NodeStatusSuspended = "suspended"
 	NodeStatusRejected  = "rejected"
 
-	NodeTierPrimary  = "primary"
-	NodeTierRegional = "regional"
-	NodeTierBranch   = "branch"
+	NodeTierPrimary = "primary"
+	NodeTierBranch  = "branch"
 )
 
 // Node represents a SeaShell server participating in the blockchain network.
@@ -32,10 +31,10 @@ type Node struct {
 	ApprovedBy      string     `json:"approved_by,omitempty"`
 	RejectionReason string     `json:"rejection_reason,omitempty"`
 
-	// 3-tier topology fields. Existing records with empty NodeTier are treated as "branch".
-	NodeTier        string `json:"node_tier,omitempty"`        // primary|regional|branch
-	ParentNodeID    string `json:"parent_node_id,omitempty"`
-	ParentNodeURL   string `json:"parent_node_url,omitempty"`
+	// Topology fields.
+	NodeTier      string `json:"node_tier,omitempty"`      // primary|branch
+	ParentNodeID  string `json:"parent_node_id,omitempty"`
+	ParentNodeURL string `json:"parent_node_url,omitempty"`
 	CertFingerprint string `json:"cert_fingerprint,omitempty"` // SHA-256 hex of TLS cert
 }
 
@@ -54,7 +53,6 @@ type NodeJoinRequest struct {
 	RejectionReason string     `json:"rejection_reason,omitempty"`
 	ApprovedByTier  string     `json:"approved_by_tier,omitempty"` // tier of approving admin
 
-	// 3-tier topology fields.
 	NodeTier      string `json:"node_tier,omitempty"`
 	ParentNodeID  string `json:"parent_node_id,omitempty"`
 	ParentNodeURL string `json:"parent_node_url,omitempty"`

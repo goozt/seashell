@@ -69,7 +69,9 @@ export default function AuthorityPage() {
         </h1>
         <div className="flex items-center gap-2 mt-1">
           <Badge variant={statusColor(authority.status)} className="capitalize">{authority.status}</Badge>
-          {user?.authority_role && <Badge variant="outline" className="capitalize">{user.authority_role}</Badge>}
+          {user?.authority_role && (
+            <Badge variant="outline" className="capitalize border-primary/30 text-primary">{user.authority_role}</Badge>
+          )}
         </div>
       </div>
 
@@ -87,16 +89,14 @@ export default function AuthorityPage() {
         </TabsList>
 
         <TabsContent value="info" className="space-y-3 mt-3">
-          <Card>
-            <CardContent className="py-4 space-y-2 text-sm">
-              <Row label="Status" value={<Badge variant={statusColor(authority.status)} className="capitalize">{authority.status}</Badge>} />
-              <Row label="Base Price" value={`${authority.base_price} SHELL`} />
-              <Row label="Sensitivity" value={authority.sensitivity_k.toString()} />
-              {authority.validator_pubkey && (
-                <Row label="Validator Key" value={<span className="font-mono text-xs">{truncateHash(authority.validator_pubkey, 10)}</span>} />
-              )}
-            </CardContent>
-          </Card>
+          <div className="glass-card dark:glass-card glass-card-light rounded-xl p-4 space-y-2 text-sm">
+            <Row label="Status" value={<Badge variant={statusColor(authority.status)} className="capitalize">{authority.status}</Badge>} />
+            <Row label="Base Price" value={`${authority.base_price} SHELL`} />
+            <Row label="Sensitivity" value={authority.sensitivity_k.toString()} />
+            {authority.validator_pubkey && (
+              <Row label="Validator Key" value={<span className="font-mono text-xs">{truncateHash(authority.validator_pubkey, 10)}</span>} />
+            )}
+          </div>
         </TabsContent>
 
         {isOwner && (
@@ -141,32 +141,35 @@ function MembersTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["authority-members"] }),
   });
 
-  if (isLoading) return <Skeleton className="h-32 rounded-lg" />;
+  if (isLoading) return <Skeleton className="h-32 rounded-xl" />;
   return (
     <div className="space-y-2">
       {members?.map((m) => (
-        <Card key={m.id}>
-          <CardContent className="flex items-center justify-between py-3 px-4">
+        <div key={m.id} className="glass-card dark:glass-card glass-card-light rounded-xl flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+              {m.username[0].toUpperCase()}
+            </div>
             <div>
               <p className="font-medium text-sm">{m.username}</p>
               <p className="text-xs text-muted-foreground">{m.email}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs capitalize">{m.authority_role}</Badge>
-              {m.authority_role !== "owner" && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-destructive"
-                  onClick={() => removeMutation.mutate(m.id)}
-                  disabled={removeMutation.isPending}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs capitalize border-primary/30 text-primary">{m.authority_role}</Badge>
+            {m.authority_role !== "owner" && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                onClick={() => removeMutation.mutate(m.id)}
+                disabled={removeMutation.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
       ))}
     </div>
   );
@@ -195,43 +198,45 @@ function InvitationsTab() {
     setTimeout(() => setCopiedCode(null), 2000);
   }
 
-  if (isLoading) return <Skeleton className="h-32 rounded-lg" />;
+  if (isLoading) return <Skeleton className="h-32 rounded-xl" />;
   return (
     <div className="space-y-3">
-      <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} size="sm" className="w-full">
+      <Button
+        onClick={() => createMutation.mutate()}
+        disabled={createMutation.isPending}
+        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl"
+      >
         {createMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
         Create Invitation
       </Button>
       {invitations?.map((inv) => (
-        <Card key={inv.code}>
-          <CardContent className="py-3 px-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-bold">{inv.code}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => copyCode(inv.code)}>
-                  {copiedCode === inv.code ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                </Button>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant={inv.used ? "secondary" : "default"} className="text-xs">
-                  {inv.used ? "Used" : "Active"}
-                </Badge>
-                {!inv.used && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive"
-                    onClick={() => revokeMutation.mutate(inv.code)}
-                    disabled={revokeMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Expires: {new Date(inv.expires_at).toLocaleDateString()}</p>
-          </CardContent>
-        </Card>
+        <div key={inv.code} className="glass-card dark:glass-card glass-card-light rounded-xl px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="font-mono text-sm font-bold text-primary">{inv.code}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Expires {new Date(inv.expires_at).toLocaleDateString()}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <Badge variant={inv.used ? "secondary" : "default"} className="text-[10px]">
+              {inv.used ? "Used" : "Active"}
+            </Badge>
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => copyCode(inv.code)}>
+              {copiedCode === inv.code ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
+            </Button>
+            {!inv.used && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                onClick={() => revokeMutation.mutate(inv.code)}
+                disabled={revokeMutation.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
       ))}
       {(!invitations || invitations.length === 0) && (
         <p className="text-sm text-muted-foreground text-center py-4">No invitations yet.</p>
@@ -242,20 +247,18 @@ function InvitationsTab() {
 
 function StatsTab() {
   const { data: stats, isLoading } = useQuery({ queryKey: ["authority-stats"], queryFn: authorityApi.getStats });
-  if (isLoading) return <Skeleton className="h-32 rounded-lg" />;
+  if (isLoading) return <Skeleton className="h-32 rounded-xl" />;
   return (
     <div className="grid grid-cols-3 gap-3">
       {[
         { label: "Members", value: stats?.member_count ?? 0 },
         { label: "Support", value: stats?.ticket_count ?? 0 },
-        { label: "Price", value: `${stats?.current_price?.toFixed(4) ?? "0"} SHELL` },
+        { label: "Price", value: `${stats?.current_price?.toFixed(4) ?? "0"}` },
       ].map(({ label, value }) => (
-        <Card key={label}>
-          <CardContent className="py-4 text-center">
-            <p className="text-2xl font-bold">{value}</p>
-            <p className="text-xs text-muted-foreground mt-1">{label}</p>
-          </CardContent>
-        </Card>
+        <div key={label} className="glass-card dark:glass-card glass-card-light rounded-xl py-4 text-center">
+          <p className="text-2xl font-bold font-mono">{value}</p>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-1">{label}</p>
+        </div>
       ))}
     </div>
   );
@@ -333,16 +336,13 @@ function VerificationTab() {
   return (
     <div className="space-y-5">
       {/* Config builder */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4" /> Verification Setup
-          </CardTitle>
-          <CardDescription>
-            Define the fields that members must fill out for verification.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="glass-card dark:glass-card glass-card-light rounded-xl p-5 space-y-4">
+        <div>
+          <p className="font-semibold flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" /> Verification Setup
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">Define the fields members must fill out for verification.</p>
+        </div>
           {configLoading ? (
             <Skeleton className="h-20 rounded-lg" />
           ) : (
@@ -500,87 +500,79 @@ function VerificationTab() {
               </Button>
             </>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Pending submissions */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Pending Submissions ({pendingSubs.length})</CardTitle>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => qc.invalidateQueries({ queryKey: ["verify-submissions"] })} disabled={subsLoading}>
-              <RefreshCw className={`h-3.5 w-3.5 ${subsLoading ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {subsLoading ? (
-            <Skeleton className="h-20 rounded-lg" />
-          ) : pendingSubs.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No pending submissions.</p>
-          ) : (
-            <div className="divide-y">
-              {pendingSubs.map((sub) => (
-                <div key={sub.id} className="py-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{sub.full_name || sub.username || sub.user_id}</p>
-                      <p className="text-xs text-muted-foreground">Submitted {formatRelative(sub.created_at)}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => reviewMutation.mutate({ id: sub.id, action: "approve" })}
-                        disabled={reviewMutation.isPending}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => { setReviewTarget(sub); setRemarks(""); }}
-                      >
-                        Reject
-                      </Button>
-                    </div>
+      <div className="glass-card dark:glass-card glass-card-light rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <p className="font-semibold">Pending Submissions ({pendingSubs.length})</p>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10" onClick={() => qc.invalidateQueries({ queryKey: ["verify-submissions"] })} disabled={subsLoading}>
+            <RefreshCw className={`h-3.5 w-3.5 ${subsLoading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+        {subsLoading ? (
+          <Skeleton className="h-20 rounded-xl" />
+        ) : pendingSubs.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No pending submissions.</p>
+        ) : (
+          <div className="space-y-4">
+            {pendingSubs.map((sub) => (
+              <div key={sub.id} className="border border-border/50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">{sub.full_name || sub.username || sub.user_id}</p>
+                    <p className="text-xs text-muted-foreground">Submitted {formatRelative(sub.created_at)}</p>
                   </div>
-                  <div className="bg-muted rounded p-2 space-y-1">
-                    {Object.entries(sub.field_values).map(([key, val]) => (
-                      <div key={key} className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">{key}</span>
-                        <span className="font-mono">{val}</span>
-                      </div>
-                    ))}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      onClick={() => reviewMutation.mutate({ id: sub.id, action: "approve" })}
+                      disabled={reviewMutation.isPending}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => { setReviewTarget(sub); setRemarks(""); }}
+                    >
+                      Reject
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+                  {Object.entries(sub.field_values).map(([key, val]) => (
+                    <div key={key} className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">{key}</span>
+                      <span className="font-mono">{val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Recently reviewed */}
       {reviewedSubs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Reviewed ({reviewedSubs.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y">
-              {reviewedSubs.map((sub) => (
-                <div key={sub.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{sub.full_name || sub.username || sub.user_id}</p>
-                    {sub.remarks && <p className="text-xs text-muted-foreground">{sub.remarks}</p>}
-                  </div>
-                  <Badge variant={sub.status === "approved" ? "default" : "destructive"} className="capitalize">
-                    {sub.status}
-                  </Badge>
+        <div className="glass-card dark:glass-card glass-card-light rounded-xl p-5 space-y-3">
+          <p className="font-semibold">Reviewed ({reviewedSubs.length})</p>
+          <div className="divide-y divide-border/50">
+            {reviewedSubs.map((sub) => (
+              <div key={sub.id} className="py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{sub.full_name || sub.username || sub.user_id}</p>
+                  {sub.remarks && <p className="text-xs text-muted-foreground">{sub.remarks}</p>}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                <Badge variant={sub.status === "approved" ? "default" : "destructive"} className="capitalize">
+                  {sub.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Reject dialog */}

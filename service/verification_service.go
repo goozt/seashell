@@ -1,7 +1,13 @@
 package service
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"math/big"
 	"regexp"
 	"time"
 
@@ -157,6 +163,90 @@ func (s *VerificationService) GetUserStatus(userID, authorityID string) (*model.
 		return nil, err
 	}
 	return sub, nil
+}
+
+// IssueIdentityProof creates and stores an authority-signed identity proof that
+// binds walletAddress to the verified user. Called after wallet creation.
+// The proof is signed with the authority's validator private key.
+func (s *VerificationService) IssueIdentityProof(userID, authorityID, walletAddress string) (*model.IdentityProof, error) {
+	authority, err := s.db.GetAuthorityByID(authorityID)
+	if err != nil {
+		return nil, fmt.Errorf("load authority: %w", err)
+	}
+
+	dBytes, err := s.db.GetAuthorityPrivKey(authorityID)
+	if err != nil {
+		return nil, fmt.Errorf("load authority key: %w", err)
+	}
+
+	// Reconstruct ECDSA private key from D scalar bytes.
+	curve := elliptic.P256()
+	priv := new(ecdsa.PrivateKey)
+	priv.D = new(big.Int).SetBytes(dBytes)
+	priv.PublicKey.Curve = curve
+	priv.PublicKey.X, priv.PublicKey.Y = curve.ScalarBaseMult(dBytes)
+
+	// UserIDHash: hex(SHA256(userID + ":" + authorityID)) — privacy-preserving on-chain identity.
+	rawHash := sha256.Sum256([]byte(userID + ":" + authorityID))
+	userIDHash := hex.EncodeToString(rawHash[:])
+
+	// Sign: SHA256(walletAddress + ":" + userIDHash + ":" + authorityID)
+	sigInput := sha256.Sum256([]byte(walletAddress + ":" + userIDHash + ":" + authorityID))
+	r, sVal, err := ecdsa.Sign(rand.Reader, priv, sigInput[:])
+	if err != nil {
+		return nil, fmt.Errorf("sign identity proof: %w", err)
+	}
+
+	// Fixed-width 64-byte encoding (32 bytes r || 32 bytes s), zero-padded big-endian.
+	rBytes := make([]byte, 32)
+	sBytes := make([]byte, 32)
+	r.FillBytes(rBytes)
+	sVal.FillBytes(sBytes)
+	sig := hex.EncodeToString(append(rBytes, sBytes...))
+
+	pubKeyHex := authority.ValidatorPubKey
+
+	proof := &model.IdentityProof{
+		WalletAddress:   walletAddress,
+		UserIDHash:      userIDHash,
+		AuthorityID:     authorityID,
+		AuthorityName:   authority.Name,
+		AuthorityPubKey: pubKeyHex,
+		Sig:             sig,
+	}
+
+	if err := s.db.SaveIdentityProof(userID, proof); err != nil {
+		return nil, fmt.Errorf("save identity proof: %w", err)
+	}
+	return proof, nil
+}
+
+// VerifyIdentityProof checks that an IdentityProof's signature is valid.
+// Returns nil if the proof is valid.
+func VerifyIdentityProof(proof *model.IdentityProof) error {
+	pubKeyBytes, err := hex.DecodeString(proof.AuthorityPubKey)
+	if err != nil || len(pubKeyBytes) != 64 {
+		return fmt.Errorf("invalid authority public key")
+	}
+
+	sigBytes, err := hex.DecodeString(proof.Sig)
+	if err != nil || len(sigBytes) != 64 {
+		return fmt.Errorf("invalid signature encoding")
+	}
+
+	curve := elliptic.P256()
+	x := new(big.Int).SetBytes(pubKeyBytes[:32])
+	y := new(big.Int).SetBytes(pubKeyBytes[32:])
+	pubKey := ecdsa.PublicKey{Curve: curve, X: x, Y: y}
+
+	r := new(big.Int).SetBytes(sigBytes[:32])
+	s := new(big.Int).SetBytes(sigBytes[32:])
+
+	sigInput := sha256.Sum256([]byte(proof.WalletAddress + ":" + proof.UserIDHash + ":" + proof.AuthorityID))
+	if !ecdsa.Verify(&pubKey, sigInput[:], r, s) {
+		return fmt.Errorf("signature verification failed")
+	}
+	return nil
 }
 
 // IsUserVerified returns true if the user has an approved submission for the given authority.

@@ -42,12 +42,26 @@ export interface AuthData {
 
 // ── Blockchain ────────────────────────────────────────────────────────────────
 
+export interface ChainEvent {
+  type: "authority_registered" | "user_verified";
+  authority_id: string;
+  authority_name: string;
+  height: number;
+  validator_pub_key?: string;
+  user_id_hash?: string;
+  wallet_address?: string;
+  signer_pub_key: string;
+  sig: string;
+}
+
 export interface Block {
   hash: string;
   height: number;
   timestamp: string;
   valid_poa: boolean;
   tx_count: number;
+  events?: ChainEvent[];
+  event_count?: number;
 }
 
 export interface ValueRecord {
@@ -69,17 +83,32 @@ export interface WalletInfo {
   message?: string;
 }
 
+// ── Identity Proof ────────────────────────────────────────────────────────────
+
+export interface IdentityProof {
+  wallet_address: string;
+  user_id_hash: string;
+  authority_id: string;
+  authority_name: string;
+  authority_pub_key: string;
+  sig: string;
+}
+
 // ── Transaction ───────────────────────────────────────────────────────────────
 
 export interface Transaction {
   id?: string;
+  tx_id?: string;
   from_address?: string;
   to_address?: string;
   amount?: number;
   block_height?: number;
+  block_hash?: string;
   timestamp?: string;
+  is_coinbase?: boolean;
   member_id?: string;
   member_username?: string;
+  identity_proof?: IdentityProof | null;
 }
 
 // ── Authority ─────────────────────────────────────────────────────────────────

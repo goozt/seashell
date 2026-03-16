@@ -19,6 +19,7 @@ type Block struct {
 	Timestamp    uint
 	PrevHash     []byte
 	Transactions []*Transaction
+	Events       []ChainEvent   // governance audit log (authority registrations, user verifications)
 	Hash         []byte
 	Height       uint64
 	Signatures   []ValidatorSig // replaces Validator + Signature (M-of-N quorum)

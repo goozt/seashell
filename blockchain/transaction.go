@@ -12,13 +12,15 @@ import (
 	"log"
 	"strings"
 
+	"github.com/goozt/seashell/model"
 	"github.com/goozt/seashell/wallet"
 )
 
 type Transaction struct {
-	Id      []byte
-	Inputs  []TxInput
-	Outputs []TxOutput
+	Id            []byte
+	Inputs        []TxInput
+	Outputs       []TxOutput
+	IdentityProof *model.IdentityProof // nil for coinbase and unverified senders
 }
 
 func NewTransaction(from, to string, amount int, chain *BlockChain) *Transaction {
@@ -53,7 +55,7 @@ func NewTransaction(from, to string, amount int, chain *BlockChain) *Transaction
 		outputs = append(outputs, *NewTxOutput(acc-amount, from))
 	}
 
-	tx := Transaction{nil, inputs, outputs}
+	tx := Transaction{Id: nil, Inputs: inputs, Outputs: outputs}
 	tx.Id = tx.Hash()
 	chain.SignTransaction(&tx, w.PrivateKey)
 
@@ -68,7 +70,7 @@ func CoinbaseTx(to, data string) *Transaction {
 	txin := TxInput{[]byte{}, -1, nil, []byte(data)}
 	txout := NewTxOutput(100, to)
 
-	tx := Transaction{nil, []TxInput{txin}, []TxOutput{*txout}}
+	tx := Transaction{Inputs: []TxInput{txin}, Outputs: []TxOutput{*txout}}
 	tx.SetID()
 
 	return &tx
@@ -149,7 +151,7 @@ func (tx *Transaction) TrimmedCopy() *Transaction {
 		outputs = append(outputs, TxOutput{out.Value, out.PubKeyHash})
 	}
 
-	txCopy := Transaction{tx.Id, inputs, outputs}
+	txCopy := Transaction{Id: tx.Id, Inputs: inputs, Outputs: outputs}
 
 	return &txCopy
 }

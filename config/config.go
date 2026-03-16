@@ -41,13 +41,9 @@ type Config struct {
 	// CACertPath is the path to the CA certificate chain file.
 	CACertPath string // ENV: CA_CERT_PATH, default ./certs/ca.crt
 
-	// NodeTier identifies this node's role in the 3-tier hierarchy.
-	// Values: "primary" | "regional" | "branch". Default: "branch".
+	// NodeTier identifies this node's role in the network.
+	// Values: "primary" | "branch". Default: "branch".
 	NodeTier string // ENV: NODE_TIER
-
-	// RegionalNodeURL is the URL of the regional node that supervises this branch node.
-	// Empty for primary and regional nodes.
-	RegionalNodeURL string // ENV: REGIONAL_NODE_URL
 
 	// ArchivePath is the directory where archived blockchain blocks are stored.
 	// Default: $DB_PATH/archive
@@ -110,8 +106,7 @@ func Load() *Config {
 		TLSEnabled:            getEnvBool("TLS_ENABLED", false),
 		CertPath:              getEnv("CERT_PATH", "./certs/node.crt"),
 		CACertPath:            getEnv("CA_CERT_PATH", "./certs/ca.crt"),
-		NodeTier:              getEnv("NODE_TIER", map[bool]string{true: "primary", false: "branch"}[isPrimaryNode]),
-		RegionalNodeURL:       getEnv("REGIONAL_NODE_URL", ""),
+		NodeTier:    getEnv("NODE_TIER", map[bool]string{true: "primary", false: "branch"}[isPrimaryNode]),
 		ArchivePath:           getEnv("ARCHIVE_PATH", ""),
 		ArchiveRetentionYears: getEnvInt("ARCHIVE_RETENTION_YEARS", 6),
 		IdPBaseURL:            getEnv("IDP_BASE_URL", "http://localhost:9999"),

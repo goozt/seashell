@@ -30,20 +30,15 @@ func NewNodeService(db *store.DB, chainSvc *ChainService, cfg *config.Config) *N
 }
 
 // Bootstrap performs node-startup initialisation based on the node's tier.
-//   - primary:  ensures a self-registration record exists.
-//   - regional: registers with the primary node, syncs chain.
-//   - branch:   registers with regional (or primary) node, syncs chain.
+//   - primary: ensures a self-registration record exists.
+//   - branch:  registers with the primary node, syncs chain.
 //
 // Bootstrap is called once during server startup.
 func (s *NodeService) Bootstrap() error {
-	switch s.cfg.NodeTier {
-	case model.NodeTierPrimary:
+	if s.cfg.NodeTier == model.NodeTierPrimary {
 		return s.bootstrapPrimary()
-	case model.NodeTierRegional:
-		return s.bootstrapRegional()
-	default: // branch or unset
-		return s.bootstrapBranch()
 	}
+	return s.bootstrapBranch()
 }
 
 func (s *NodeService) bootstrapPrimary() error {
@@ -82,18 +77,9 @@ func (s *NodeService) bootstrapPrimary() error {
 	return nil
 }
 
-// bootstrapRegional registers this node as a regional node with the primary.
-func (s *NodeService) bootstrapRegional() error {
-	return s.bootstrapSecondaryWithParent(s.cfg.PrimaryNodeURL, model.NodeTierRegional)
-}
-
-// bootstrapBranch registers this node as a branch node with the regional (or primary) node.
+// bootstrapBranch registers this node as a branch node with the primary node.
 func (s *NodeService) bootstrapBranch() error {
-	parentURL := s.cfg.RegionalNodeURL
-	if parentURL == "" {
-		parentURL = s.cfg.PrimaryNodeURL
-	}
-	return s.bootstrapSecondaryWithParent(parentURL, model.NodeTierBranch)
+	return s.bootstrapSecondaryWithParent(s.cfg.PrimaryNodeURL, model.NodeTierBranch)
 }
 
 // bootstrapSecondaryWithParent is the shared bootstrap logic for regional and branch nodes.
@@ -147,10 +133,7 @@ func (s *NodeService) SelfID() string {
 }
 
 // OnBlockMined is called (in a goroutine) when a new block is mined locally.
-// Broadcast routing is tier-aware:
-//   - branch:   broadcast only to parent regional (or primary if no regional).
-//   - regional: fan-out to primary + all other regionals.
-//   - primary:  broadcast to all active nodes.
+// Broadcasts to all active peers (flat P2P — all nodes are equal participants).
 func (s *NodeService) OnBlockMined(blockHash []byte) {
 	if s.cfg.NodeURL == "" {
 		return
@@ -173,61 +156,19 @@ func (s *NodeService) OnBlockMined(blockHash []byte) {
 	node.BroadcastBlock(targets, block, s.cfg.NodeSecret)
 }
 
-// broadcastTargets returns the peer nodes to broadcast to based on this node's tier.
+// broadcastTargets returns all active peers except self.
 func (s *NodeService) broadcastTargets() ([]model.Node, error) {
-	tier := s.cfg.NodeTier
-
-	switch tier {
-	case model.NodeTierBranch, "":
-		// Branch sends only to its parent regional (or primary as fallback).
-		parentURL := s.cfg.RegionalNodeURL
-		if parentURL == "" {
-			parentURL = s.cfg.PrimaryNodeURL
-		}
-		if parentURL == "" {
-			return nil, nil
-		}
-		allNodes, err := s.db.ListActiveNodes()
-		if err != nil {
-			return nil, err
-		}
-		for _, n := range allNodes {
-			if n.NodeURL == parentURL {
-				return []model.Node{*n}, nil
-			}
-		}
-		return nil, nil
-
-	case model.NodeTierRegional:
-		// Regional fans out to primary + other regionals.
-		allNodes, err := s.db.ListActiveNodes()
-		if err != nil {
-			return nil, err
-		}
-		var targets []model.Node
-		for _, n := range allNodes {
-			if n.NodeURL == s.cfg.NodeURL {
-				continue
-			}
-			if n.IsPrimary || n.NodeTier == model.NodeTierRegional {
-				targets = append(targets, *n)
-			}
-		}
-		return targets, nil
-
-	default: // primary — broadcast to everyone
-		allNodes, err := s.db.ListActiveNodes()
-		if err != nil {
-			return nil, err
-		}
-		var targets []model.Node
-		for _, n := range allNodes {
-			if n.NodeURL != s.cfg.NodeURL {
-				targets = append(targets, *n)
-			}
-		}
-		return targets, nil
+	allNodes, err := s.db.ListActiveNodes()
+	if err != nil {
+		return nil, err
 	}
+	var targets []model.Node
+	for _, n := range allNodes {
+		if n.NodeURL != s.cfg.NodeURL {
+			targets = append(targets, *n)
+		}
+	}
+	return targets, nil
 }
 
 // GetNetworkNodes returns the full node list.
