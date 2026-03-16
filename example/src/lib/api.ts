@@ -89,6 +89,9 @@ async function request<T>(
       }
     }
     tokenStore.clear();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("seashell:session-expired"));
+    }
     throw new ApiError(401, "Session expired. Please log in again.");
   }
 

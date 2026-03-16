@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { Toaster, toast } from "sonner";
+import { useAuthStore } from "@/store/auth";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -16,6 +17,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
         },
       })
   );
+
+  const logout = useAuthStore((s) => s.logout);
+
+  useEffect(() => {
+    function onSessionExpired() {
+      logout();
+      toast.error("Session expired. Please sign in again.");
+    }
+    window.addEventListener("seashell:session-expired", onSessionExpired);
+    return () => window.removeEventListener("seashell:session-expired", onSessionExpired);
+  }, [logout]);
 
   useEffect(() => {
     function onAlert(e: Event) {

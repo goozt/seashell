@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "clean:start": "rm -rf .next/ && next build && next start",
     "lint": "next lint",
     "setup": "npx shadcn@latest init --yes && npx shadcn@latest add button card badge input label textarea select tabs dialog sheet skeleton toast avatar dropdown-menu separator progress alert",
     "gen:env": "node -e \"const c=require('crypto');['JWT_SECRET','NODE_SECRET'].forEach(k=>process.stdout.write(k+'=\\''+c.randomBytes(32).toString('hex')+'\\'\\n'));const a='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@!-_+=~^';let p='';while(p.length<32)c.randomBytes(1).forEach(b=>{if(b<210&&p.length<32)p+=a[b%70]});process.stdout.write('SUPERADMIN_PASSWORD=\\''+p+'\\'\\n')\""
