@@ -269,6 +269,7 @@ function VerificationTab() {
   // Config state for form builder
   const [fields, setFields] = useState<FieldDefinition[]>([]);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [optionDrafts, setOptionDrafts] = useState<Record<number, string>>({});
 
   const { data: config, isLoading: configLoading } = useQuery({
     queryKey: ["verify-config"],
@@ -377,26 +378,92 @@ function VerificationTab() {
                       </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Min Length</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={field.min_length ?? ""}
-                        onChange={(e) => updateField(idx, { min_length: e.target.value ? parseInt(e.target.value) : 0 })}
-                      />
+                  {field.input_type === "select" ? (
+                    <div className="space-y-2">
+                      <Label className="text-xs">Options</Label>
+                        {(field.options ?? []).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {field.options!.map((opt, optIdx) => (
+                              <span key={optIdx} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium">
+                                {opt}
+                                <button
+                                  type="button"
+                                  onClick={() => updateField(idx, { options: field.options!.filter((_, i) => i !== optIdx) })}
+                                  className="ml-0.5 rounded-full hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Type an option…"
+                          value={optionDrafts[idx] ?? ""}
+                          onChange={(e) => setOptionDrafts((p) => ({ ...p, [idx]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const val = (optionDrafts[idx] ?? "").trim();
+                              if (!val || (field.options ?? []).includes(val)) return;
+                              updateField(idx, { options: [...(field.options ?? []), val] });
+                              setOptionDrafts((p) => ({ ...p, [idx]: "" }));
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            const val = (optionDrafts[idx] ?? "").trim();
+                            if (!val || (field.options ?? []).includes(val)) return;
+                            updateField(idx, { options: [...(field.options ?? []), val] });
+                            setOptionDrafts((p) => ({ ...p, [idx]: "" }));
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Max Length</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        value={field.max_length ?? ""}
-                        onChange={(e) => updateField(idx, { max_length: e.target.value ? parseInt(e.target.value) : 0 })}
-                      />
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Min Length</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={field.min_length ?? ""}
+                          onChange={(e) => updateField(idx, { min_length: e.target.value ? parseInt(e.target.value) : 0 })}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Max Length</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={field.max_length ?? ""}
+                          onChange={(e) => updateField(idx, { max_length: e.target.value ? parseInt(e.target.value) : 0 })}
+                        />
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <label className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={field.required}
+                            onChange={(e) => updateField(idx, { required: e.target.checked })}
+                            className="rounded"
+                          />
+                          Required
+                        </label>
+                      </div>
                     </div>
-                    <div className="flex items-end pb-1">
+                  )}
+                  {field.input_type === "select" && (
+                    <div className="flex items-center gap-2">
                       <label className="flex items-center gap-2 text-xs cursor-pointer">
                         <input
                           type="checkbox"
@@ -407,7 +474,7 @@ function VerificationTab() {
                         Required
                       </label>
                     </div>
-                  </div>
+                  )}
                   {field.input_type === "number" && (
                     <p className="text-xs text-muted-foreground">Number fields only accept digits.</p>
                   )}
