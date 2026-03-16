@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { LogOut, User } from "lucide-react";
 import { LogoLink } from "@/components/layout/seashell-logo";
 import { NotificationCenter } from "@/components/layout/notification-center";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
@@ -40,6 +41,7 @@ export function Header() {
                   </Badge>
                 )}
               </div>
+              <ThemeToggle />
               <NotificationCenter />
               <Button
                 variant="ghost"
