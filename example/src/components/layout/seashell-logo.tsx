@@ -10,13 +10,13 @@ interface LogoIconProps {
 /** Just the shell icon mark */
 export function LogoIcon({ size = 32, className }: LogoIconProps) {
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       src="/logo-icon.png"
       alt="SeaShell"
       width={size}
       height={size}
       className={cn("shrink-0", className)}
-      priority
     />
   );
 }
