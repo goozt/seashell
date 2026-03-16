@@ -165,8 +165,9 @@ func (s *AuthService) BootstrapSuperAdmin(password, email string) error {
 
 // dbInitFile is the seed file loaded on first boot.
 type dbInitFile struct {
-	Admins []dbInitUser `json:"admins"`
-	Users  []dbInitUser `json:"users"`
+	Admins      []dbInitUser      `json:"admins"`
+	Users       []dbInitUser      `json:"users"`
+	Authorities []dbInitAuthority `json:"authorities"`
 }
 
 type dbInitUser struct {
@@ -175,6 +176,15 @@ type dbInitUser struct {
 	LastName  string `json:"last_name"`
 	Email     string `json:"email"`
 	Password  string `json:"password"`
+}
+
+type dbInitAuthority struct {
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	Owner        string   `json:"owner"`        // username of owner
+	Members      []string `json:"members"`      // usernames of members (excluding owner)
+	BasePrice    float64  `json:"base_price"`
+	SensitivityK float64  `json:"sensitivity"`
 }
 
 // SeedFromFile reads db_init.json next to the executable and creates any
@@ -227,7 +237,73 @@ func (s *AuthService) SeedFromFile(path string) error {
 	for _, u := range init.Users {
 		seed(u, model.RoleUser)
 	}
+	for _, a := range init.Authorities {
+		s.seedAuthority(a)
+	}
 	return nil
+}
+
+func (s *AuthService) seedAuthority(a dbInitAuthority) {
+	// Look up owner by username.
+	owner, err := s.db.GetUserByUsername(a.Owner)
+	if err != nil {
+		log.Printf("db_init: authority %q: owner %q not found", a.Name, a.Owner)
+		return
+	}
+	// Skip if owner already belongs to an authority.
+	if owner.AuthorityID != "" {
+		log.Printf("db_init: authority %q: owner %q already in an authority, skipping", a.Name, a.Owner)
+		return
+	}
+	now := time.Now()
+	auth := &model.Authority{
+		ID:           uuid.New().String(),
+		Name:         a.Name,
+		Description:  a.Description,
+		OwnerID:      owner.ID,
+		Status:       model.AuthorityStatusActive,
+		BasePrice:    a.BasePrice,
+		SensitivityK: a.SensitivityK,
+		ApprovedAt:   &now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := s.db.SaveAuthority(auth); err != nil {
+		log.Printf("db_init: authority %q: save: %v", a.Name, err)
+		return
+	}
+	// Assign owner.
+	owner.AuthorityID = auth.ID
+	owner.AuthorityRole = model.AuthorityRoleOwner
+	owner.UpdatedAt = now
+	if err := s.db.SaveUser(owner); err != nil {
+		log.Printf("db_init: authority %q: update owner: %v", a.Name, err)
+		return
+	}
+	log.Printf("db_init: authority %q created (owner=%s)", a.Name, a.Owner)
+	// Assign members.
+	for _, username := range a.Members {
+		if username == a.Owner {
+			continue
+		}
+		member, err := s.db.GetUserByUsername(username)
+		if err != nil {
+			log.Printf("db_init: authority %q: member %q not found", a.Name, username)
+			continue
+		}
+		if member.AuthorityID != "" {
+			log.Printf("db_init: authority %q: member %q already in an authority, skipping", a.Name, username)
+			continue
+		}
+		member.AuthorityID = auth.ID
+		member.AuthorityRole = model.AuthorityRoleMember
+		member.UpdatedAt = now
+		if err := s.db.SaveUser(member); err != nil {
+			log.Printf("db_init: authority %q: update member %q: %v", a.Name, username, err)
+			continue
+		}
+		log.Printf("db_init: authority %q: added member %s", a.Name, username)
+	}
 }
 
 func randomHex(n int) (string, error) {

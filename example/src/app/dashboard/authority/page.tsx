@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { statusColor, truncateHash, formatRelative } from "@/lib/utils";
-import { Building2, Users, Clipboard, Plus, Trash2, Loader2, Copy, Check, ShieldCheck, X } from "lucide-react";
+import { Building2, Users, Clipboard, Plus, Trash2, Loader2, Copy, Check, ShieldCheck, X, RefreshCw } from "lucide-react";
 import type { FieldDefinition, VerificationSubmission } from "@/types/api";
 
 export default function AuthorityPage() {
@@ -439,7 +439,12 @@ function VerificationTab() {
       {/* Pending submissions */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Pending Submissions ({pendingSubs.length})</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Pending Submissions ({pendingSubs.length})</CardTitle>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => qc.invalidateQueries({ queryKey: ["verify-submissions"] })} disabled={subsLoading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${subsLoading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {subsLoading ? (

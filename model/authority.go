@@ -20,6 +20,7 @@ type Authority struct {
 	BasePrice       float64    `json:"base_price"`       // initial credits per SHELL
 	SensitivityK    float64    `json:"sensitivity_k"`    // velocity multiplier for value engine
 	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 	ApprovedAt      *time.Time `json:"approved_at,omitempty"`
 	ApprovedBy      string     `json:"approved_by,omitempty"`
 	RejectionReason string     `json:"rejection_reason,omitempty"`
