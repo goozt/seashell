@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { tokenStore } from "@/lib/api";
+import { tokenStore, authApi } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
 import { useNotificationStore } from "@/store/notifications";
 import type { TicketReply } from "@/types/api";
 
 export interface WSMessage {
-  type: "notification" | "alert" | "support" | "auth";
+  type: "notification" | "alert" | "support" | "auth" | "token_refresh";
   id: string;
   status?: string; // present on auth ack
   payload: {
@@ -36,7 +36,7 @@ const WS_CLOSE_AUTH_FAILED = 4001;
 const WS_CLOSE_CLIENT_STOP = 4000;
 
 export function useWebSocket() {
-  const { hasHydrated, isAuthenticated } = useAuthStore();
+  const { hasHydrated, isAuthenticated, setUser } = useAuthStore();
   const add = useNotificationStore((s) => s.add);
   const addRef = useRef(add);
   addRef.current = add;
@@ -116,6 +116,16 @@ export function useWebSocket() {
             link: msg.payload.link,
             read: false,
             createdAt: new Date(),
+          });
+          return;
+        }
+
+        if (msg.type === "token_refresh") {
+          authApi.refresh().then((updated) => {
+            if (updated) {
+              setUser(updated);
+              window.dispatchEvent(new CustomEvent("seashell:token_refresh"));
+            }
           });
           return;
         }

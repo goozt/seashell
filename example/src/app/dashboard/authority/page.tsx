@@ -48,6 +48,15 @@ export default function AuthorityPage() {
     }
   }, [authority?.id, user?.id]);
 
+  // Re-render page when JWT is refreshed via WS (e.g. after admin approves authority)
+  useEffect(() => {
+    function onTokenRefresh() {
+      qc.invalidateQueries();
+    }
+    window.addEventListener("seashell:token_refresh", onTokenRefresh);
+    return () => window.removeEventListener("seashell:token_refresh", onTokenRefresh);
+  }, [qc]);
+
   if (isLoading) return <div className="space-y-3 pt-4">{[1,2].map(i=><Skeleton key={i} className="h-24 rounded-lg"/>)}</div>;
 
   if (!authority) return <NoAuthority />;
@@ -173,7 +182,11 @@ function InvitationsTab() {
   });
   const revokeMutation = useMutation({
     mutationFn: authorityApi.revokeInvitation,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["invitations"] }),
+    onSuccess: (_data, code) => {
+      qc.setQueryData<typeof invitations>(["invitations"], (old) =>
+        old ? old.filter((i) => i.code !== code) : old
+      );
+    },
   });
 
   function copyCode(code: string) {

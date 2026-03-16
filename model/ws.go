@@ -6,6 +6,7 @@ const (
 	WSTypeNotification = "notification"
 	WSTypeAlert        = "alert"
 	WSTypeSupport      = "support"
+	WSTypeTokenRefresh = "token_refresh"
 )
 
 // WSMessage is the envelope sent over the WebSocket connection.

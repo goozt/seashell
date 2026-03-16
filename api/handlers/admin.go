@@ -119,6 +119,9 @@ func (h *AdminHandler) ApproveAuthorityRequest(w http.ResponseWriter, r *http.Re
 		owner.AuthorityRole = model.AuthorityRoleOwner
 		owner.UpdatedAt = time.Now()
 		_ = h.db.SaveUser(owner)
+		// Tell the owner's active sessions to refresh their JWT so the new
+		// authority claims take effect immediately without requiring re-login.
+		h.hub.SendTo(owner.ID, model.WSTypeTokenRefresh, generateID(), nil)
 	}
 
 	response.OK(w, authority)

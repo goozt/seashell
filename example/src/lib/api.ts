@@ -99,13 +99,15 @@ async function request<T>(
     throw new ApiError(401, "Session expired. Please log in again.");
   }
 
+  if (res.status === 204) return undefined as T;
+
   const json: ApiResponse<T> = await res.json();
 
   if (!res.ok || !json.success) {
     throw new ApiError(res.status, json.error ?? "Request failed");
   }
 
-  return json.data as T;
+  return (json.data ?? null) as T;
 }
 
 async function tryRefresh(): Promise<boolean> {
