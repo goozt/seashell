@@ -18,8 +18,12 @@ import { Building2, Users, Clipboard, Plus, Trash2, Loader2, Copy, Check } from 
 
 export default function AuthorityPage() {
   const qc = useQueryClient();
-  const { user } = useAuthStore();
+  const { hasHydrated, user } = useAuthStore();
   const isOwner = user?.authority_role === "owner";
+
+  if (!hasHydrated) {
+    return <div className="space-y-3 pt-4">{[1,2].map(i=><Skeleton key={i} className="h-24 rounded-lg"/>)}</div>;
+  }
 
   const { data: authority, isLoading } = useQuery({
     queryKey: ["user-authority"],
@@ -223,7 +227,7 @@ function StatsTab() {
 
 function NoAuthority() {
   const qc = useQueryClient();
-  const { user, setUser } = useAuthStore();
+  const { hasHydrated, user, setUser } = useAuthStore();
   const [tab, setTab] = useState<"create" | "join">("join");
   const [createForm, setCreateForm] = useState({ name: "", description: "" });
   const [joinCode, setJoinCode] = useState("");
@@ -233,7 +237,7 @@ function NoAuthority() {
     mutationFn: userApi.createAuthority,
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["user-authority"] });
-      if (user) setUser({ ...user, authority_id: data.id, authority_role: "owner" });
+      if (hasHydrated && user) setUser({ ...user, authority_id: data.id, authority_role: "owner" });
     },
     onError: (err: Error) => setError(err.message),
   });
@@ -242,7 +246,7 @@ function NoAuthority() {
     mutationFn: (code: string) => userApi.joinAuthority({ code }),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["user-authority"] });
-      if (user) setUser({ ...user, authority_id: data.authority.id, authority_role: "member" });
+      if (hasHydrated && user) setUser({ ...user, authority_id: data.authority.id, authority_role: "member" });
     },
     onError: (err: Error) => setError(err.message),
   });

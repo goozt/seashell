@@ -50,7 +50,9 @@ const superAdminItems: NavItem[] = [
 
 export function MobileNav() {
   const pathname = usePathname();
-  const { user } = useAuthStore();
+  const { hasHydrated, user } = useAuthStore();
+
+  if (!hasHydrated) return null;
 
   const items =
     user?.role === "superadmin"

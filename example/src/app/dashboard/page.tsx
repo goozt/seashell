@@ -19,7 +19,17 @@ import {
 } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user } = useAuthStore();
+  const { hasHydrated, user } = useAuthStore();
+
+  if (!hasHydrated) {
+    return (
+      <div className="space-y-5">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-28 w-full" />
+      </div>
+    );
+  }
 
   const { data: wallet, isLoading: walletLoading } = useQuery({
     queryKey: ["wallet"],

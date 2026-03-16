@@ -13,7 +13,7 @@ import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 export function Header() {
   const router = useRouter();
-  const { user, logout } = useAuthStore();
+  const { hasHydrated, user, logout } = useAuthStore();
   useWebSocket();
   usePushNotifications();
 
@@ -29,7 +29,7 @@ export function Header() {
         <LogoLink href="/" iconSize={28} />
 
         <div className="flex items-center gap-2">
-          {user && (
+          {hasHydrated && user && (
             <>
               <div className="hidden sm:flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />

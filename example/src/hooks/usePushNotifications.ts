@@ -29,10 +29,10 @@ async function sendSubscriptionToServer(
 }
 
 export function usePushNotifications() {
-  const { isAuthenticated } = useAuthStore();
+  const { hasHydrated, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!hasHydrated || !isAuthenticated) return;
     if (typeof window === "undefined") return;
     if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
 
@@ -52,5 +52,5 @@ export function usePushNotifications() {
 
       await sendSubscriptionToServer(sub, token);
     })();
-  }, [isAuthenticated]);
+  }, [hasHydrated, isAuthenticated]);
 }

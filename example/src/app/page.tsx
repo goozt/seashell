@@ -13,7 +13,8 @@ import { TrendingUp, Layers, LogIn, LayoutDashboard } from "lucide-react";
 import { LogoWordmark, LogoIcon } from "@/components/layout/seashell-logo";
 
 export default function HomePage() {
-  const { isAuthenticated, user } = useAuthStore();
+  const { hasHydrated, isAuthenticated } = useAuthStore();
+  const showAuthenticated = hasHydrated && isAuthenticated;
 
   const { data: blocks, isLoading: blocksLoading } = useQuery({
     queryKey: ["blocks"],
@@ -36,7 +37,7 @@ export default function HomePage() {
             <LogoIcon size={28} className="rounded-full shadow-sm" />
             <span className="font-bold text-lg">SeaShell</span>
           </div>
-          {isAuthenticated ? (
+          {showAuthenticated ? (
             <Button asChild size="sm">
               <Link href="/dashboard">
                 <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -61,7 +62,7 @@ export default function HomePage() {
           <p className="mt-1 text-muted-foreground text-sm">
             An cryptocurrency implementation in Go featuring a <strong>Proof of Authority</strong> blockchain, UTXO-based transactions, ECDSA wallets, a REST API with JWT authentication, and a multi-role management system.
           </p>
-          {!isAuthenticated && (
+          {!showAuthenticated && (
             <div className="mt-4 flex gap-2 justify-center">
               <Button asChild>
                 <Link href="/register">Get Started</Link>

@@ -33,8 +33,8 @@ function truncate(s?: string, n = 32): string {
 export default function NodeDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const { user } = useAuthStore();
-  const isSuperAdmin = user?.role === "superadmin";
+  const { hasHydrated, user } = useAuthStore();
+  const isSuperAdmin = hasHydrated && user?.role === "superadmin";
   const qc = useQueryClient();
 
   const { data: node, isLoading, error } = useQuery({

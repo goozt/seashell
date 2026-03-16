@@ -8,6 +8,8 @@ import { tokenStore } from "@/lib/api";
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  hasHydrated: boolean;
+  setHasHydrated: (value: boolean) => void;
   setUser: (user: User) => void;
   logout: () => void;
 }
@@ -17,6 +19,8 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
+      hasHydrated: false,
+      setHasHydrated: (value) => set({ hasHydrated: value }),
       setUser: (user) => set({ user, isAuthenticated: true }),
       logout: () => {
         tokenStore.clear();
@@ -26,6 +30,9 @@ export const useAuthStore = create<AuthState>()(
     {
       name: "seashell_auth",
       partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

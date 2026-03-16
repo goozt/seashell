@@ -36,14 +36,14 @@ const WS_CLOSE_AUTH_FAILED = 4001;
 const WS_CLOSE_CLIENT_STOP = 4000;
 
 export function useWebSocket() {
-  const { isAuthenticated } = useAuthStore();
+  const { hasHydrated, isAuthenticated } = useAuthStore();
   const add = useNotificationStore((s) => s.add);
   const addRef = useRef(add);
   addRef.current = add;
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!hasHydrated || !isAuthenticated) return;
 
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
     const wsBase = apiBase.replace(/^http/, "ws");
@@ -150,5 +150,5 @@ export function useWebSocket() {
       clearTimeout(reconnectTimeout);
       ws?.close(WS_CLOSE_CLIENT_STOP, "component unmount");
     };
-  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [hasHydrated, isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 }
