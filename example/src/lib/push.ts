@@ -30,10 +30,16 @@ export async function subscribeToPush(
   if (!sub) {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") return null;
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey).buffer as ArrayBuffer,
-    });
+    try {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey).buffer as ArrayBuffer,
+      });
+    } catch {
+      // Browser push service unreachable (network issue, HTTP env, or push
+      // not supported). Degrade gracefully — in-app WS notifications still work.
+      return null;
+    }
   }
 
   const json = sub.toJSON() as {

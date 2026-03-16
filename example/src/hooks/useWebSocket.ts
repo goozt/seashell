@@ -33,10 +33,13 @@ export const wsEvents = {
 
 // Close code 4001 means the server rejected the token — do not reconnect.
 const WS_CLOSE_AUTH_FAILED = 4001;
+const WS_CLOSE_CLIENT_STOP = 4000;
 
 export function useWebSocket() {
   const { isAuthenticated } = useAuthStore();
   const add = useNotificationStore((s) => s.add);
+  const addRef = useRef(add);
+  addRef.current = add;
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -49,8 +52,11 @@ export function useWebSocket() {
     let ws: WebSocket;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
     let authenticated = false;
+    let shouldReconnect = true;
+    let reconnectDelayMs = 3000;
 
     function connect() {
+      if (!shouldReconnect) return;
       authenticated = false;
       ws = new WebSocket(url);
       wsRef.current = ws;
@@ -58,7 +64,12 @@ export function useWebSocket() {
       ws.onopen = () => {
         // Send auth as the very first message — before any other traffic.
         const token = tokenStore.getAccess();
-        if (!token) { ws.close(); return; }
+        if (!token) {
+          shouldReconnect = false;
+          ws.close(WS_CLOSE_CLIENT_STOP, "missing token");
+          return;
+        }
+        reconnectDelayMs = 3000;
         ws.send(JSON.stringify({ type: "auth", token }));
       };
 
@@ -81,7 +92,7 @@ export function useWebSocket() {
           if (listener) {
             listener(ticketId, reply);
           } else {
-            add({
+            addRef.current({
               id: msg.id,
               type: "support",
               title: "New reply on support request",
@@ -97,7 +108,7 @@ export function useWebSocket() {
         }
 
         if (msg.type === "notification") {
-          add({
+          addRef.current({
             id: msg.id,
             type: "notification",
             title: msg.payload.title ?? "",
@@ -111,7 +122,7 @@ export function useWebSocket() {
 
         if (msg.type === "alert") {
           window.dispatchEvent(new CustomEvent("seashell:alert", { detail: msg.payload }));
-          add({
+          addRef.current({
             id: msg.id,
             type: "alert",
             title: msg.payload.title ?? "",
@@ -123,17 +134,21 @@ export function useWebSocket() {
       };
 
       ws.onclose = (event) => {
+        wsRef.current = null;
+        if (!shouldReconnect) return;
         // 4001 = server rejected token; don't retry (token is invalid/expired).
         if (event.code === WS_CLOSE_AUTH_FAILED) return;
-        reconnectTimeout = setTimeout(connect, 3000);
+        reconnectTimeout = setTimeout(connect, reconnectDelayMs);
+        reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30000);
       };
     }
 
     connect();
 
     return () => {
+      shouldReconnect = false;
       clearTimeout(reconnectTimeout);
-      ws?.close();
+      ws?.close(WS_CLOSE_CLIENT_STOP, "component unmount");
     };
-  }, [isAuthenticated, add]);
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
 }

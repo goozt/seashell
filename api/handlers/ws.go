@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/goozt/seashell/service"
+	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
@@ -46,6 +46,8 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
+		_ = conn.WriteMessage(websocket.CloseMessage,
+			websocket.FormatCloseMessage(4001, "auth read failed"))
 		conn.Close()
 		return
 	}

@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (user?.role !== "admin" && user?.role !== "superadmin") {
       router.replace("/dashboard");
     }
-  }, [mounted, isAuthenticated, user, router]);
+  }, [mounted, isAuthenticated, user?.role, router]);
 
   if (!mounted) return null;
   if (!isAuthenticated || (user?.role !== "admin" && user?.role !== "superadmin")) return null;
