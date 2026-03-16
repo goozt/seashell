@@ -110,7 +110,7 @@ func Load() *Config {
 		TLSEnabled:            getEnvBool("TLS_ENABLED", false),
 		CertPath:              getEnv("CERT_PATH", "./certs/node.crt"),
 		CACertPath:            getEnv("CA_CERT_PATH", "./certs/ca.crt"),
-		NodeTier:              getEnv("NODE_TIER", "branch"),
+		NodeTier:              getEnv("NODE_TIER", map[bool]string{true: "primary", false: "branch"}[isPrimaryNode]),
 		RegionalNodeURL:       getEnv("REGIONAL_NODE_URL", ""),
 		ArchivePath:           getEnv("ARCHIVE_PATH", ""),
 		ArchiveRetentionYears: getEnvInt("ARCHIVE_RETENTION_YEARS", 6),
