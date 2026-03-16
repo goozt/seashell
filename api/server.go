@@ -60,6 +60,7 @@ func Start(cfg *config.Config) error {
 	idpClient := service.NewMockIdPClient(cfg.IdPBaseURL)
 	kycSvc := service.NewKYCService(db, idpClient, nodeSvc.SelfID(), hmacKey)
 	archivalSvc := service.NewArchivalService(chainSvc, archiveDB, cfg)
+	verifySvc := service.NewVerificationService(db)
 
 	// Initialize blockchain with genesis block if primary node and chain doesn't exist yet.
 	if cfg.IsPrimary {
@@ -123,7 +124,7 @@ func Start(cfg *config.Config) error {
 	// Build handlers.
 	authH := handlers.NewAuthHandler(db, authSvc)
 	publicH := handlers.NewPublicHandler(chainSvc, valueSvc, db)
-	userH := handlers.NewUserHandler(db, chainSvc, authSvc, hub, pushSvc)
+	userH := handlers.NewUserHandler(db, chainSvc, authSvc, hub, pushSvc, verifySvc)
 	authorityOwnerH := handlers.NewAuthorityOwnerHandler(db, chainSvc, valueSvc)
 	adminH := handlers.NewAdminHandler(db, cfg.DBPath+"/blocks", hub, pushSvc)
 	superAdminH := handlers.NewSuperAdminHandler(db, authSvc)
@@ -131,6 +132,7 @@ func Start(cfg *config.Config) error {
 	wsH := handlers.NewWSHandler(hub, authSvc)
 	nodeH := handlers.NewNodeHandler(db, chainSvc, nodeSvc, quorumSvc, cfg.IsPrimary, cfg.NodeURL)
 	kycH := handlers.NewKYCHandler(db, kycSvc)
+	verifyH := handlers.NewVerificationHandler(db, verifySvc)
 	archiveH := handlers.NewArchiveHandler(archiveDB)
 	_ = quorumSvc // used in future block creation flow
 
@@ -185,6 +187,9 @@ func Start(cfg *config.Config) error {
 		// KYC / identity verification.
 		r.Post("/kyc", kycH.InitiateKYC)
 		r.Get("/kyc", kycH.GetMyKYC)
+		// Modular verification (authority-level).
+		r.Get("/verification", verifyH.GetMyVerification)
+		r.Post("/verification", verifyH.SubmitVerification)
 	})
 
 	// Authority owner routes.
@@ -199,6 +204,14 @@ func Start(cfg *config.Config) error {
 		r.Get("/transactions", authorityOwnerH.GetAuthorityTransactions)
 		r.Get("/value", authorityOwnerH.GetAuthorityValue)
 		r.Get("/stats", authorityOwnerH.GetAuthorityStats)
+		// Verification config and submission management.
+		r.Route("/verification", func(r chi.Router) {
+			r.Put("/config", verifyH.SaveConfig)
+			r.Get("/config", verifyH.GetConfig)
+			r.Get("/submissions", verifyH.ListSubmissions)
+			r.Get("/submissions/{id}", verifyH.GetSubmission)
+			r.Post("/submissions/{id}/review", verifyH.ReviewSubmission)
+		})
 	})
 
 	// Admin routes (admin + superadmin).

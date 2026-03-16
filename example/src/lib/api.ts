@@ -7,6 +7,7 @@ import type {
   Authority,
   AuthorityStats,
   Block,
+  FieldDefinition,
   Invitation,
   KYCRecord,
   KYCSummary,
@@ -18,6 +19,9 @@ import type {
   Transaction,
   User,
   ValueRecord,
+  VerificationConfig,
+  VerificationStatusResponse,
+  VerificationSubmission,
   WalletInfo,
 } from "@/types/api";
 
@@ -166,6 +170,16 @@ export const authApi = {
   },
 
   me: () => request<User>("/auth/me"),
+
+  refresh: async (): Promise<User | null> => {
+    const ok = await tryRefresh();
+    if (!ok) return null;
+    try {
+      return await request<User>("/auth/me");
+    } catch {
+      return null;
+    }
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -424,6 +438,51 @@ export const kycApi = {
 
   // Admin: KYC summary for this node
   getSummary: () => request<KYCSummary>("/admin/kyc/summary"),
+};
+
+// ---------------------------------------------------------------------------
+// Verification
+// ---------------------------------------------------------------------------
+
+export const verificationApi = {
+  // User: get verification status + config + submission
+  getMyVerification: () =>
+    request<VerificationStatusResponse>("/user/verification"),
+
+  // User: submit verification form
+  submitVerification: (body: { field_values: Record<string, string> }) =>
+    request<VerificationSubmission>("/user/verification", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  // Authority owner: save/update verification config
+  saveConfig: (body: { method: string; fields: FieldDefinition[] }) =>
+    request<VerificationConfig>("/authority/verification/config", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  // Authority owner: get current config
+  getConfig: () =>
+    request<VerificationConfig>("/authority/verification/config"),
+
+  // Authority owner: list submissions
+  listSubmissions: (status?: string) =>
+    request<VerificationSubmission[]>(
+      `/authority/verification/submissions${status ? `?status=${status}` : ""}`
+    ),
+
+  // Authority owner: get single submission
+  getSubmission: (id: string) =>
+    request<VerificationSubmission>(`/authority/verification/submissions/${id}`),
+
+  // Authority owner: approve/reject
+  reviewSubmission: (id: string, body: { action: "approve" | "reject"; remarks?: string }) =>
+    request<VerificationSubmission>(
+      `/authority/verification/submissions/${id}/review`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
 };
 
 // ---------------------------------------------------------------------------

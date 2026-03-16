@@ -229,6 +229,54 @@ export interface KYCSummary {
   unverified: number;
 }
 
+// ── Verification ─────────────────────────────────────────────────────────────
+
+export type VerificationMethod = "manual";
+export type VerifySubmissionStatus = "pending" | "approved" | "rejected";
+
+export interface FieldDefinition {
+  name: string;
+  label: string;
+  input_type: "text" | "number" | "email" | "textarea" | "select";
+  required: boolean;
+  pattern?: string;
+  min_length?: number;
+  max_length?: number;
+  options?: string[];
+  placeholder?: string;
+}
+
+export interface VerificationConfig {
+  authority_id: string;
+  method: VerificationMethod;
+  fields: FieldDefinition[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VerificationSubmission {
+  id: string;
+  authority_id: string;
+  user_id: string;
+  method: string;
+  field_values: Record<string, string>;
+  status: VerifySubmissionStatus;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  remarks?: string;
+  username?: string;
+  full_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VerificationStatusResponse {
+  config_status: "not_configured" | "configured";
+  config?: VerificationConfig;
+  submission?: VerificationSubmission;
+}
+
 // ── Quorum ────────────────────────────────────────────────────────────────────
 
 export interface ValidatorSig {

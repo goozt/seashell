@@ -59,6 +59,7 @@ seashell/
 │   ├── node.go
 │   ├── ticket.go
 │   ├── invitation.go
+│   ├── verification.go
 │   └── value.go
 ├── store/                   # BadgerDB persistence (API database)
 │   ├── db.go                # Open/close, generic get/set/iterate
@@ -69,6 +70,7 @@ seashell/
 │   ├── ticket_store.go
 │   ├── invitation_store.go
 │   ├── value_store.go
+│   ├── verification_store.go
 │   └── refresh_store.go
 ├── blockchain/              # Core chain: blocks, transactions, PoA
 │   ├── block.go             # Block struct, GOB serialization
@@ -88,7 +90,8 @@ seashell/
 │   ├── auth_service.go      # JWT tokens, password hashing, superadmin bootstrap
 │   ├── chain_service.go     # Thread-safe blockchain operations
 │   ├── node_service.go      # Node lifecycle, P2P orchestration
-│   └── value_service.go     # Velocity-of-Money price engine
+│   ├── value_service.go     # Velocity-of-Money price engine
+│   └── verification_service.go # Modular user verification system
 ├── api/
 │   ├── server.go            # chi router, service wiring, server bootstrap
 │   ├── response/
@@ -103,7 +106,8 @@ seashell/
 │       ├── authority_owner.go # Members, invitations, authority stats
 │       ├── admin.go         # Authority requests, user list, ticket management
 │       ├── superadmin.go    # Admin CRUD, authority suspension
-│       └── node.go          # P2P endpoints, node request management
+│       ├── node.go          # P2P endpoints, node request management
+│       └── verification.go  # Modular verification config + submission handlers
 ├── node/                    # P2P networking
 │   ├── peer.go              # HTTP client for talking to peers
 │   ├── sync.go              # Full and incremental chain sync
@@ -301,6 +305,9 @@ iterPrefix(prefix, fn) // Scan all keys with a given prefix
 | `refresh:` | Refresh tokens |
 | `wallet_privkey:` | User wallet private keys (raw D bytes) |
 | `authority_privkey:` | Authority validator private keys (raw D bytes) |
+| `verifyconfig:` | Authority verification configurations |
+| `verifysub:` | Verification submissions (by UUID) |
+| `idx:verifysub:user:` | User+Authority → latest submission index |
 
 ---
 
@@ -371,6 +378,8 @@ type Node struct {
 - **Ticket** — Support ticket with replies, statuses (`open`, `in_progress`, `resolved`, `closed`), scoped to an authority.
 - **Invitation** — One-time-use code for joining an authority, with expiration.
 - **ValueRecord** — Snapshot of an authority's token price at a given block height: price, transaction volume, circulating supply, and velocity.
+- **VerificationConfig** — Per-authority configuration for the modular verification system. Contains `Method` (currently `"manual"`) and `Fields` (array of `FieldDefinition` with name, label, input type, and validation rules). Extensible for future 3rd-party API and OAuth-based methods.
+- **VerificationSubmission** — A user's verification attempt. Contains submitted field values (`map[string]string`), status (`pending`/`approved`/`rejected`), reviewer remarks, and timestamps.
 
 ---
 
@@ -492,6 +501,8 @@ Every response uses a standard JSON envelope:
 | GET/POST | `/api/v1/user/tickets` | Support tickets |
 | GET | `/api/v1/user/tickets/{id}` | Ticket detail |
 | POST | `/api/v1/user/tickets/{id}/reply` | Reply to ticket |
+| GET | `/api/v1/user/verification` | Verification status + config |
+| POST | `/api/v1/user/verification` | Submit verification form |
 
 **Authority Owner (JWT + owner role):**
 
@@ -504,6 +515,10 @@ Every response uses a standard JSON envelope:
 | GET | `/api/v1/authority/transactions` | Authority transactions |
 | GET | `/api/v1/authority/value` | Token price |
 | GET | `/api/v1/authority/stats` | Authority statistics |
+| GET/PUT | `/api/v1/authority/verification/config` | Verification field config |
+| GET | `/api/v1/authority/verification/submissions` | List member submissions |
+| GET | `/api/v1/authority/verification/submissions/{id}` | Submission detail |
+| POST | `/api/v1/authority/verification/submissions/{id}/review` | Approve/reject submission |
 
 **Admin (JWT + admin/superadmin):**
 
@@ -615,7 +630,8 @@ The Next.js app lives in `example/` and communicates with the Go API via a typed
 | `/dashboard/wallet` | User | Create wallet, view address and balance |
 | `/dashboard/transactions` | User | Transaction history and send form |
 | `/dashboard/tickets` | User | Support tickets |
-| `/dashboard/authority` | Owner | Members, invitations, value, stats |
+| `/dashboard/authority` | Owner | Members, invitations, value, stats, verification setup |
+| `/dashboard/verification` | User | Dynamic verification form and status |
 | `/admin` | Admin | Dashboard with network status card |
 | `/admin/requests` | Admin | Authority approval queue |
 | `/admin/users` | Admin | User list |
@@ -678,6 +694,41 @@ New node:
   -> Fetch peer list
   -> Start health checker
   -> Begin normal operation
+```
+
+### Modular Verification
+
+```
+Authority owner -> PUT /authority/verification/config { method: "manual", fields: [...] }
+  -> Validate field definitions (unique names, valid types)
+  -> Store VerificationConfig for authority
+  -> Members can now see the verification form
+
+Member -> GET /user/verification
+  -> If authority has no config: { config_status: "not_configured" }
+  -> If configured: return config fields + latest submission (if any)
+
+Member -> POST /user/verification { field_values: { ... } }
+  -> Validate field values against config (required, pattern, length)
+  -> Check no pending/approved submission exists
+  -> Create VerificationSubmission (status=pending)
+
+Owner -> GET /authority/verification/submissions?status=pending
+  -> List pending submissions with user info
+
+Owner -> POST /authority/verification/submissions/{id}/review { action: "approve" }
+  -> Set submission status=approved
+  -> User can now create a wallet
+
+Owner -> POST /authority/verification/submissions/{id}/review { action: "reject", remarks: "..." }
+  -> Set submission status=rejected with remarks
+  -> User sees remarks and can resubmit
+
+Wallet gate:
+  POST /user/wallet
+  -> If user is affiliated: check IsUserVerified(userID, authorityID)
+  -> If not verified: return 403 "verification required"
+  -> If verified: proceed with wallet creation
 ```
 
 ---

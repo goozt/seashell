@@ -16,16 +16,17 @@ import (
 
 // UserHandler serves /api/v1/user/* routes (any authenticated user).
 type UserHandler struct {
-	db       *store.DB
-	chainSvc *service.ChainService
-	authSvc  *service.AuthService
-	hub      *service.WSHub
-	pushSvc  *service.PushService
+	db        *store.DB
+	chainSvc  *service.ChainService
+	authSvc   *service.AuthService
+	hub       *service.WSHub
+	pushSvc   *service.PushService
+	verifySvc *service.VerificationService
 }
 
 // NewUserHandler creates a UserHandler.
-func NewUserHandler(db *store.DB, chainSvc *service.ChainService, authSvc *service.AuthService, hub *service.WSHub, pushSvc *service.PushService) *UserHandler {
-	return &UserHandler{db: db, chainSvc: chainSvc, authSvc: authSvc, hub: hub, pushSvc: pushSvc}
+func NewUserHandler(db *store.DB, chainSvc *service.ChainService, authSvc *service.AuthService, hub *service.WSHub, pushSvc *service.PushService, verifySvc *service.VerificationService) *UserHandler {
+	return &UserHandler{db: db, chainSvc: chainSvc, authSvc: authSvc, hub: hub, pushSvc: pushSvc, verifySvc: verifySvc}
 }
 
 func (h *UserHandler) currentUser(r *http.Request) (*model.User, bool) {
@@ -130,6 +131,18 @@ func (h *UserHandler) CreateWallet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		response.Unauthorized(w)
 		return
+	}
+	// Enforce verification gate for authority-affiliated users.
+	if u.IsAffiliated() {
+		verified, err := h.verifySvc.IsUserVerified(u.ID, u.AuthorityID)
+		if err != nil {
+			response.InternalError(w, "verification check failed")
+			return
+		}
+		if !verified {
+			response.Error(w, http.StatusForbidden, "verification required before creating a wallet")
+			return
+		}
 	}
 	if u.WalletAddress != "" {
 		response.OK(w, map[string]string{"address": u.WalletAddress, "message": "wallet already exists"})
